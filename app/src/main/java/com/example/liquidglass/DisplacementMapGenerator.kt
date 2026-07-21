@@ -74,34 +74,36 @@ class DisplacementMapGenerator(
         }
         maxScale = max(maxScale, 1f)
         
-        // 第二遍:归一化并写入 Bitmap
+        // 第二遍:归一化并写入像素数组（批量 setPixels，比逐像素 setPixel 快一个数量级）
+        val pixels = IntArray(width * height)
         for (y in 0 until height) {
+            val rowOffset = y * width
             for (x in 0 until width) {
                 val dx = rawDisplacements[y][x * 2]
                 val dy = rawDisplacements[y][x * 2 + 1]
-                
+
                 // 边缘平滑处理
                 val edgeDistance = min(min(x, y), min(width - x - 1, height - y - 1))
                 val edgeFactor = min(1f, edgeDistance / 2f)
-                
+
                 val smoothedDx = dx * edgeFactor
                 val smoothedDy = dy * edgeFactor
-                
+
                 // 归一化到 [0, 1] 范围
                 val r = (smoothedDx / maxScale + 0.5f).coerceIn(0f, 1f)
                 val g = (smoothedDy / maxScale + 0.5f).coerceIn(0f, 1f)
-                
+
                 // 写入像素 (R=dx, G=dy, B=dy, A=255)
-                val color = Color.argb(
+                pixels[rowOffset + x] = Color.argb(
                     255,
                     (r * 255).toInt(),
                     (g * 255).toInt(),
                     (g * 255).toInt()
                 )
-                bitmap.setPixel(x, y, color)
             }
         }
-        
+        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+
         return bitmap
     }
     

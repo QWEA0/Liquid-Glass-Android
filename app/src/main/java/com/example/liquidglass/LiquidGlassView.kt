@@ -336,8 +336,9 @@ class LiquidGlassView @JvmOverloads constructor(
     // 自定义背景捕获器
     private var customBackdropCapture: ((RectF) -> Bitmap?)? = null
 
-    // 位移贴图缓存
+    // 位移贴图缓存（跨 detach 保留，仅尺寸变化时重建）
     private var displacementMaps: Map<DisplacementMode, Bitmap>? = null
+    private var mapGenerationId = 0  // 异步生成版本号，防止过期结果覆盖
 
     // ✅ 智能缓存机制 - 分层缓存策略
     private var cachedBackdrop: Bitmap? = null          // L1: 原始背景
@@ -492,13 +493,32 @@ class LiquidGlassView @JvmOverloads constructor(
     }
     
     /**
-     * 生成位移贴图
+     * 异步生成位移贴图
+     *
+     * 生成是纯 CPU 计算（三种模式逐像素两遍循环），在主线程执行会导致
+     * 布局/场景切换明显卡顿，因此放到后台线程；完成前色差效果暂缺，
+     * 完成后自动重绘补上
      */
     private fun generateDisplacementMaps() {
-        if (width > 0 && height > 0) {
-            displacementMaps = DisplacementMapGenerator.generateStandardMaps(width, height)
-            invalidate()
-        }
+        val w = width
+        val h = height
+        if (w <= 0 || h <= 0) return
+
+        val genId = ++mapGenerationId
+        Thread({
+            val maps = DisplacementMapGenerator.generateStandardMaps(w, h)
+            post {
+                // 生成期间尺寸又变了/有更新的请求 → 丢弃本次结果
+                if (genId != mapGenerationId || w != width || h != height) {
+                    maps.values.forEach { it.recycle() }
+                    return@post
+                }
+                displacementMaps?.values?.forEach { it.recycle() }
+                displacementMaps = maps
+                aberrationDirty = true
+                invalidate()
+            }
+        }, "LiquidGlass-DispMap").start()
     }
     
     /**
@@ -1082,10 +1102,8 @@ class LiquidGlassView @JvmOverloads constructor(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
 
-        // ✅ 重新挂载（如切换演示场景时被移到新父容器）后恢复状态：
-        // onDetachedFromWindow 已回收位移贴图，而尺寸未变时不会触发
-        // onSizeChanged，需要在这里补一次生成，否则色差效果（GPU 路径
-        // 直接回退 CPU，CPU 路径跳过色差）将一直缺失
+        // ✅ 位移贴图跨 detach 保留，这里只兜底（首次挂载且 init 的
+        // post 尚未执行成功等情况）；缺失时补一次异步生成
         post {
             if (displacementMaps == null && width > 0 && height > 0) {
                 generateDisplacementMaps()
@@ -1126,9 +1144,8 @@ class LiquidGlassView @JvmOverloads constructor(
         cachedBlurred = null
         cachedResult = null
 
-        // 清理位移贴图
-        displacementMaps?.values?.forEach { it.recycle() }
-        displacementMaps = null
+        // 注意：位移贴图跨 detach 保留（切换场景重挂载时无需重新生成，
+        // 避免主线程卡顿），仅在尺寸变化时重建，最终随视图对象被 GC 回收
     }
 }
 
