@@ -28,6 +28,7 @@ package com.example.liquidglass
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.*
+import android.os.Build
 import android.util.AttributeSet
 import android.util.Log
 import android.view.MotionEvent
@@ -45,12 +46,11 @@ class LiquidGlassView @JvmOverloads constructor(
 
     companion object {
         private const val TAG = "LiquidGlassView"
-        private const val ENABLE_PERFORMANCE_LOG = true  // 性能日志开关
+        private const val ENABLE_PERFORMANCE_LOG = false  // 性能日志开关（仅调试时打开，每帧构造日志字符串有开销）
         private const val ENABLE_MEMORY_LOG = false  // 内存日志开关（默认关闭，避免日志污染）
 
-        // ✅ 极致优化参数
-        private const val DOWNSCALE_FACTOR = 0.05f  // 降采样比例 (0.4 = 6.25倍提升, 0.5 = 4倍提升)
-        private const val RENDER_INTERVAL = 1  // 渲染间隔 (改为1以避免闪烁)
+        // 背景变化检测的抽样网格（8x8 = 最多 64 个采样点）
+        private const val BACKDROP_SAMPLE_GRID = 8
     }
 
     // ✅ 效果开关
@@ -241,7 +241,8 @@ class LiquidGlassView @JvmOverloads constructor(
         set(value) {
             if (field != value) {
                 field = value
-                blurDirty = true
+                // 饱和度在最终绘制时通过 colorFilter 应用，无需重新走模糊管线
+                updateSaturationFilter()
                 invalidate()
             }
         }
@@ -334,18 +335,12 @@ class LiquidGlassView @JvmOverloads constructor(
     // 背景变化检测
     private var lastBackdropHash: Int = 0
     private var lastBlurRadius: Float = -1f
-    private var lastSaturation: Float = -1f
     private var lastAberrationIntensity: Float = -1f
 
     // 脏标记（不包括 backdrop，因为每帧都需要捕获以支持动态背景）
     private var blurDirty = true
     private var aberrationDirty = true
     private var dispersionDirty = true
-
-    private var needsRedraw = true
-
-    // ✅ 智能跳帧计数器
-    private var frameCounter = 0
 
     // ✅ 动态背景模式（控制是否持续重绘）
     var enableDynamicBackground = false
@@ -355,6 +350,73 @@ class LiquidGlassView @JvmOverloads constructor(
                 if (value) {
                     invalidate()  // 启用时开始重绘循环
                 }
+            }
+        }
+
+    // ==================== 性能统计（替代解析 logcat） ====================
+
+    /**
+     * 单帧渲染统计
+     *
+     * @param captureMs 背景捕获耗时
+     * @param blurMs 模糊处理耗时（缓存命中时为 0）
+     * @param effectMs 色差/色散耗时（缓存命中时为 0）
+     * @param finalizeMs 收尾耗时
+     * @param totalMs 管线总耗时
+     * @param effectName 当前生效的效果（"GPU模糊"/"色散"/"色差"/"无"）
+     * @param blurRecomputed 本帧是否重算了模糊（false = 缓存命中）
+     * @param effectRecomputed 本帧是否重算了色差/色散
+     * @param processedWidth 实际处理的图像宽度（下采样后）
+     * @param processedHeight 实际处理的图像高度
+     * @param drawFps 实测绘制帧率（按每秒 onDraw 次数统计）
+     */
+    data class FrameStats(
+        val captureMs: Float,
+        val blurMs: Float,
+        val effectMs: Float,
+        val finalizeMs: Float,
+        val totalMs: Float,
+        val effectName: String,
+        val blurRecomputed: Boolean,
+        val effectRecomputed: Boolean,
+        val processedWidth: Int,
+        val processedHeight: Int,
+        val drawFps: Int
+    )
+
+    /** 是否采集每帧统计（仅几次 System.nanoTime() 调用，开销可忽略，默认开启） */
+    var collectFrameStats = true
+
+    /** 最近一帧的渲染统计（供性能监控 UI 轮询读取） */
+    @Volatile
+    var lastFrameStats: FrameStats? = null
+        private set
+
+    /** 每帧统计回调（可选；在主线程渲染时同步调用，注意不要做重活） */
+    var frameStatsListener: ((FrameStats) -> Unit)? = null
+
+    // 实测 FPS 计数
+    private var fpsWindowStartNs = 0L
+    private var fpsFrameCount = 0
+    private var measuredFps = 0
+
+    // ✅ API 31+ 全 GPU 模糊渲染器（延迟创建）
+    private var hardwareBlur: HardwareBackdropBlur? = null
+
+    /**
+     * 允许在 API 31+ 使用全 GPU 渲染路径（RenderNode + RenderEffect）
+     *
+     * 该路径零 Bitmap 分配、零 CPU 像素处理、零 GPU→CPU 回读，
+     * 目前覆盖"背景模糊 + 饱和度"；开启色差/色散或自定义背景捕获时
+     * 自动回退到 CPU 管线
+     */
+    var useHardwareBlurWhenPossible = true
+        set(value) {
+            if (field != value) {
+                field = value
+                blurDirty = true
+                aberrationDirty = true
+                invalidate()
             }
         }
 
@@ -373,10 +435,16 @@ class LiquidGlassView @JvmOverloads constructor(
     private var scaleAnimator: ValueAnimator? = null
     
     // 绘制相关
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val clipPath = Path()  // 用于圆角裁剪
-    
+    private val resultSrcRect = Rect()  // 复用，避免每帧分配
+    private val resultDstRect = Rect()
+
+    // ✅ 捕获背景期间跳过自身绘制
+    // （替代切换 visibility 的方案：setVisibility 会触发父视图 invalidate，造成额外重绘）
+    internal var isCapturingBackdrop = false
+
     init {
         setWillNotDraw(false)
 
@@ -386,9 +454,28 @@ class LiquidGlassView @JvmOverloads constructor(
         // 初始化阴影
         updateShadow()
 
+        // 初始化饱和度滤镜
+        updateSaturationFilter()
+
         // 异步生成位移贴图
         post {
             generateDisplacementMaps()
+        }
+    }
+
+    override fun draw(canvas: Canvas) {
+        if (isCapturingBackdrop) return
+        super.draw(canvas)
+    }
+
+    /**
+     * 更新饱和度滤镜（在最终绘制时应用，省掉一次全图复制的独立 pass）
+     */
+    private fun updateSaturationFilter() {
+        paint.colorFilter = if (saturation != 100f) {
+            ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(saturation / 100f) })
+        } else {
+            null
         }
     }
     
@@ -398,7 +485,6 @@ class LiquidGlassView @JvmOverloads constructor(
     private fun generateDisplacementMaps() {
         if (width > 0 && height > 0) {
             displacementMaps = DisplacementMapGenerator.generateStandardMaps(width, height)
-            needsRedraw = true
             invalidate()
         }
     }
@@ -437,7 +523,6 @@ class LiquidGlassView @JvmOverloads constructor(
         lastBackdropHash = 0  // 重置背景哈希
         blurDirty = true
         aberrationDirty = true
-        needsRedraw = true
     }
 
     /**
@@ -453,9 +538,22 @@ class LiquidGlassView @JvmOverloads constructor(
     
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        
+
         if (width <= 0 || height <= 0) return
-        
+
+        // ✅ 实测帧率统计（每秒结算一次）
+        if (collectFrameStats) {
+            val now = System.nanoTime()
+            if (fpsWindowStartNs == 0L) fpsWindowStartNs = now
+            fpsFrameCount++
+            val elapsed = now - fpsWindowStartNs
+            if (elapsed >= 1_000_000_000L) {
+                measuredFps = (fpsFrameCount * 1_000_000_000L / elapsed).toInt()
+                fpsFrameCount = 0
+                fpsWindowStartNs = now
+            }
+        }
+
         // 应用缩放变换
         canvas.save()
         canvas.scale(scaleX, scaleY, width / 2f, height / 2f)
@@ -488,30 +586,30 @@ class LiquidGlassView @JvmOverloads constructor(
         val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
         val calculatedBlurRadius = (if (overLight) 12f else 4f) + blurAmount * 32f
 
+        // ✅ API 31+ 全 GPU 快速路径（模糊+饱和度，零拷贝）
+        if (tryDrawHardwareBlur(canvas, calculatedBlurRadius)) {
+            if (enableEdgeHighlight) {
+                drawEdgeHighlight(canvas, bounds)
+            }
+            if (enableDynamicBackground) {
+                invalidate()
+            }
+            return
+        }
+
         // 直接调用渲染逻辑
         renderGlassEffectSync(bounds, calculatedBlurRadius)
 
-        // 绘制结果（应用圆角裁剪）
+        // 绘制结果（应用圆角裁剪 + 饱和度滤镜；下采样时自动放大回原始尺寸）
         cachedResult?.let {
             if (!it.isRecycled) {
-                // 保存 canvas 状态
                 val saveCount = canvas.save()
-
-                // 应用圆角裁剪
                 canvas.clipPath(clipPath)
 
-                // ✅ 如果使用了全局下采样，需要放大回原始尺寸
-                if (globalDownsampleFactor < 1.0f) {
-                    val srcRect = android.graphics.Rect(0, 0, it.width, it.height)
-                    val dstRect = android.graphics.Rect(0, 0, width, height)
-                    val scalePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-                    canvas.drawBitmap(it, srcRect, dstRect, scalePaint)
-                } else {
-                    // 绘制 bitmap（原始尺寸）
-                    canvas.drawBitmap(it, 0f, 0f, paint)
-                }
+                resultSrcRect.set(0, 0, it.width, it.height)
+                resultDstRect.set(0, 0, width, height)
+                canvas.drawBitmap(it, resultSrcRect, resultDstRect, paint)
 
-                // 恢复 canvas 状态
                 canvas.restoreToCount(saveCount)
             }
         }
@@ -525,6 +623,70 @@ class LiquidGlassView @JvmOverloads constructor(
         if (enableDynamicBackground) {
             invalidate()
         }
+    }
+
+    /**
+     * 尝试走 API 31+ 的全 GPU 渲染路径
+     *
+     * 覆盖范围：
+     * - API 31+：背景模糊 + 饱和度（RenderEffect）
+     * - API 33+：额外支持色差（RuntimeShader，与 CPU 实现同一套位移贴图算法）
+     * - 色散、自定义背景捕获仍走 CPU 管线
+     *
+     * 满足条件时不产生任何 Bitmap 分配与 CPU 像素处理。
+     *
+     * @return true 表示已完成绘制，调用方无需再走 CPU 管线
+     */
+    private fun tryDrawHardwareBlur(canvas: Canvas, blurRadius: Float): Boolean {
+        if (!useHardwareBlurWhenPossible) return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
+        if (!canvas.isHardwareAccelerated) return false
+        if (enableChromaticDispersion) return false
+        if (customBackdropCapture != null) return false
+
+        // 色差：API 33+ 用 RuntimeShader 在 GPU 上完成；32 及以下回退 CPU
+        val wantsAberration = enableChromaticAberration && aberrationIntensity > 0f
+        var aberrationParams: HardwareBackdropBlur.AberrationParams? = null
+        if (wantsAberration) {
+            if (!HardwareBackdropBlur.supportsRuntimeShader()) return false
+            // 位移贴图尚未生成时先回退 CPU（CPU 路径同样会跳过色差）
+            val map = displacementMaps?.get(displacementMode) ?: return false
+            val effectiveScale = if (overLight) displacementScale * 0.5f else displacementScale
+            aberrationParams = HardwareBackdropBlur.AberrationParams(
+                displacementMap = map,
+                displacementScale = effectiveScale,
+                redOffset = aberrationRedOffset * aberrationIntensity,
+                greenOffset = aberrationGreenOffset * aberrationIntensity,
+                blueOffset = aberrationBlueOffset * aberrationIntensity
+            )
+        }
+
+        val startNs = if (collectFrameStats) System.nanoTime() else 0L
+
+        val renderer = hardwareBlur ?: HardwareBackdropBlur().also { hardwareBlur = it }
+        val effectiveRadius = if (enableBackdropBlur) blurRadius else 0f
+        val ok = renderer.draw(canvas, this, effectiveRadius, saturation, clipPath, aberrationParams)
+
+        if (ok && collectFrameStats) {
+            // GPU 路径只统计 CPU 侧的录制耗时（实际模糊/色差在 GPU 异步执行）
+            val totalMs = (System.nanoTime() - startNs) / 1_000_000f
+            val stats = FrameStats(
+                captureMs = 0f,
+                blurMs = 0f,
+                effectMs = 0f,
+                finalizeMs = 0f,
+                totalMs = totalMs,
+                effectName = if (aberrationParams != null) "GPU模糊+色差" else "GPU模糊",
+                blurRecomputed = false,
+                effectRecomputed = false,
+                processedWidth = width,
+                processedHeight = height,
+                drawFps = measuredFps
+            )
+            lastFrameStats = stats
+            frameStatsListener?.invoke(stats)
+        }
+        return ok
     }
 
     /**
@@ -556,21 +718,22 @@ class LiquidGlassView @JvmOverloads constructor(
      * 同步渲染玻璃效果（主线程调用，优化版）
      */
     private fun renderGlassEffectSync(bounds: RectF, blurRadius: Float) {
-        val startTime = if (ENABLE_PERFORMANCE_LOG) System.nanoTime() else 0L
-
         val scale = if (overLight) displacementScale * 0.5f else displacementScale
 
-        // ✅ 检测参数变化
-        val blurChanged = blurRadius != lastBlurRadius || saturation != lastSaturation
+        // ✅ 检测参数变化（饱和度已移到最终绘制的 colorFilter，不再影响模糊缓存）
+        val blurChanged = blurRadius != lastBlurRadius
         val aberrationChanged = aberrationIntensity != lastAberrationIntensity
 
-        // ✅ 性能监控 - 详细分阶段计时
+        // ✅ 性能监控 - 详细分阶段计时（服务于 FrameStats 和可选的 logcat 日志）
+        val collectTiming = collectFrameStats || ENABLE_PERFORMANCE_LOG
+        var blurRecomputed = false
+        var effectRecomputed = false
         var t1 = 0L
         var t2 = 0L
         var t3 = 0L
         var t4 = 0L
         var t5 = 0L
-        if (ENABLE_PERFORMANCE_LOG) {
+        if (collectTiming) {
             t1 = System.nanoTime()
         }
 
@@ -581,37 +744,34 @@ class LiquidGlassView @JvmOverloads constructor(
         }
 
         // 1. 捕获背景（L1 缓存）- 每帧都捕获以支持动态背景
+        // ✅ 内置捕获路径直接在缩小的 Canvas 上绘制父视图，
+        //    避免"全尺寸截图 + createScaledBitmap"的额外分配和缩放 pass
         var backdrop = if (customBackdropCapture != null) {
-            customBackdropCapture?.invoke(bounds)
+            customBackdropCapture?.invoke(bounds)?.let { full ->
+                if (globalDownsampleFactor < 1.0f) {
+                    val scaledWidth = (full.width * globalDownsampleFactor).toInt().coerceAtLeast(1)
+                    val scaledHeight = (full.height * globalDownsampleFactor).toInt().coerceAtLeast(1)
+                    val scaled = Bitmap.createScaledBitmap(full, scaledWidth, scaledHeight, true)
+                    if (scaled != full) full.recycle()
+                    scaled
+                } else {
+                    full
+                }
+            }
         } else {
-            // ✅ 使用增强模糊效果的背景捕获
-            enhancedBlurEffect.captureBackdrop(bounds)
+            enhancedBlurEffect.captureBackdrop(bounds, globalDownsampleFactor)
         }
 
         if (backdrop == null) {
-            backdrop = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val fallbackWidth = (width * globalDownsampleFactor).toInt().coerceAtLeast(1)
+            val fallbackHeight = (height * globalDownsampleFactor).toInt().coerceAtLeast(1)
+            backdrop = Bitmap.createBitmap(fallbackWidth, fallbackHeight, Bitmap.Config.ARGB_8888)
             backdrop.eraseColor(Color.argb(200, 255, 255, 255))
         }
 
-        // ✅ 全局下采样：截图→缩小→处理→放大
-        val originalWidth = backdrop.width
-        val originalHeight = backdrop.height
-        val processedBackdrop = if (globalDownsampleFactor < 1.0f) {
-            val scaledWidth = (originalWidth * globalDownsampleFactor).toInt().coerceAtLeast(1)
-            val scaledHeight = (originalHeight * globalDownsampleFactor).toInt().coerceAtLeast(1)
-
-            // 缩小到处理尺寸
-            val scaled = Bitmap.createScaledBitmap(backdrop, scaledWidth, scaledHeight, true)
-            backdrop.recycle()
-            scaled
-        } else {
-            backdrop
-        }
-
-        backdrop = processedBackdrop
-
         // ✅ 检测背景是否真的变化了（支持滚动背景）
-        val backdropHash = backdrop.hashCode()
+        // 注意：必须做内容抽样，Bitmap.hashCode() 是对象身份哈希，每帧新建对象永远不同
+        val backdropHash = computeBackdropSignature(backdrop)
         if (backdropHash != lastBackdropHash) {
             cachedBackdrop?.recycle()
             cachedBackdrop = backdrop
@@ -622,17 +782,20 @@ class LiquidGlassView @JvmOverloads constructor(
             backdrop.recycle()
         }
 
-        if (ENABLE_PERFORMANCE_LOG) t2 = System.nanoTime()
+        if (collectTiming) t2 = System.nanoTime()
 
         // 2. 应用模糊和饱和度（L2 缓存）- 可选
         if (enableBackdropBlur && (blurDirty || blurChanged)) {
             cachedBackdrop?.let { backdrop ->
-                cachedBlurred?.recycle()
+                // 关闭模糊时 cachedBlurred 会直接引用 cachedBackdrop，此时不能回收
+                if (cachedBlurred != cachedBackdrop) {
+                    cachedBlurred?.recycle()
+                }
                 // ✅ 使用增强模糊效果（支持多种算法）
-                cachedBlurred = enhancedBlurEffect.applyEffect(backdrop, blurRadius, saturation)
+                cachedBlurred = enhancedBlurEffect.applyEffect(backdrop, blurRadius)
                 lastBlurRadius = blurRadius
-                lastSaturation = saturation
                 aberrationDirty = true
+                blurRecomputed = true
             }
             blurDirty = false
         } else if (!enableBackdropBlur && cachedBackdrop != null) {
@@ -644,7 +807,7 @@ class LiquidGlassView @JvmOverloads constructor(
             aberrationDirty = true
         }
 
-        if (ENABLE_PERFORMANCE_LOG) t3 = System.nanoTime()
+        if (collectTiming) t3 = System.nanoTime()
 
         // 3. 应用色差或色散效果（互斥）
         val displacementMap = displacementMaps?.get(displacementMode)
@@ -663,9 +826,10 @@ class LiquidGlassView @JvmOverloads constructor(
 
                 cachedResult?.recycle()
                 cachedResult = dispersed
+                effectRecomputed = true
             }
 
-            if (ENABLE_PERFORMANCE_LOG) t4 = System.nanoTime()
+            if (collectTiming) t4 = System.nanoTime()
 
             aberrationDirty = false  // 重置色差脏标记
             dispersionDirty = false  // 重置色散脏标记
@@ -685,19 +849,20 @@ class LiquidGlassView @JvmOverloads constructor(
                     blueOffset = aberrationBlueOffset
                 )
 
-                if (ENABLE_PERFORMANCE_LOG) t4 = System.nanoTime()
+                if (collectTiming) t4 = System.nanoTime()
 
                 // 4. 直接使用色差效果结果（已移除圆角遮罩）
                 cachedResult?.recycle()
                 cachedResult = aberrated
                 lastAberrationIntensity = aberrationIntensity
+                effectRecomputed = true
             }
             aberrationDirty = false
             dispersionDirty = false  // 重置色散脏标记
         }
         // 3c. 无效果
         else if (aberrationDirty || dispersionDirty || !enableChromaticAberration) {
-            if (ENABLE_PERFORMANCE_LOG) t4 = System.nanoTime()
+            if (collectTiming) t4 = System.nanoTime()
 
             // 没有色差/色散效果，直接使用模糊后的结果（已移除圆角遮罩）
             cachedBlurred?.let { blurred ->
@@ -708,10 +873,11 @@ class LiquidGlassView @JvmOverloads constructor(
             dispersionDirty = false
         }
 
-        if (ENABLE_PERFORMANCE_LOG) t5 = System.nanoTime()
+        if (collectTiming) {
+            t5 = System.nanoTime()
+            // 效果分支全部缓存命中时 t4 不会被赋值
+            if (t4 == 0L) t4 = t3
 
-        // ✅ 详细性能日志 - 显示各个效果的耗时
-        if (ENABLE_PERFORMANCE_LOG) {
             val captureTime = (t2 - t1) / 1_000_000f
             val blurTime = (t3 - t2) / 1_000_000f
             val aberrationTime = (t4 - t3) / 1_000_000f
@@ -724,21 +890,36 @@ class LiquidGlassView @JvmOverloads constructor(
                 else -> "无"
             }
 
-            Log.d(TAG, """
-                |📊 [性能分析] 各效果耗时:
-                |  1️⃣ 捕获背景: ${String.format("%.3f", captureTime)}ms ${if (enableBackdropBlur) "✅" else "⏭️"}
-                |  2️⃣ 模糊处理: ${String.format("%.3f", blurTime)}ms ${if (enableBackdropBlur) "✅" else "⏭️"}
-                |  3️⃣ $effectName 效果: ${String.format("%.3f", aberrationTime)}ms ${if (enableChromaticDispersion || enableChromaticAberration) "✅" else "⏭️"}
-                |  4️⃣ 最终处理: ${String.format("%.3f", finalizeTime)}ms
-                |  ⏱️ 总耗时: ${String.format("%.3f", totalTime)}ms (~${(1000f / totalTime).toInt()} FPS)
-                |  💾 缓存状态: blur=${!blurDirty}, aberration=${!aberrationDirty}, dispersion=${!dispersionDirty}
-            """.trimMargin())
+            // ✅ 结构化统计（供性能监控 UI 直接读取，替代解析 logcat）
+            if (collectFrameStats) {
+                val stats = FrameStats(
+                    captureMs = captureTime,
+                    blurMs = blurTime,
+                    effectMs = aberrationTime,
+                    finalizeMs = finalizeTime,
+                    totalMs = totalTime,
+                    effectName = effectName,
+                    blurRecomputed = blurRecomputed,
+                    effectRecomputed = effectRecomputed,
+                    processedWidth = cachedBackdrop?.width ?: 0,
+                    processedHeight = cachedBackdrop?.height ?: 0,
+                    drawFps = measuredFps
+                )
+                lastFrameStats = stats
+                frameStatsListener?.invoke(stats)
+            }
 
-            // 性能警告
-            if (totalTime > 16.67f) {
-                Log.w(TAG, "⚠️ 渲染过慢! 耗时 ${String.format("%.2f", totalTime)}ms (目标: <16.67ms for 60 FPS)")
-            } else {
-                Log.i(TAG, "✅ 渲染成功! 耗时 ${String.format("%.2f", totalTime)}ms，达到 60 FPS 目标")
+            // 可选的 logcat 文本日志（默认关闭，每帧字符串拼接有开销）
+            if (ENABLE_PERFORMANCE_LOG) {
+                Log.d(TAG, """
+                    |📊 [性能分析] 各效果耗时:
+                    |  1️⃣ 捕获背景: ${String.format("%.3f", captureTime)}ms ${if (enableBackdropBlur) "✅" else "⏭️"}
+                    |  2️⃣ 模糊处理: ${String.format("%.3f", blurTime)}ms ${if (enableBackdropBlur) "✅" else "⏭️"}
+                    |  3️⃣ $effectName 效果: ${String.format("%.3f", aberrationTime)}ms ${if (enableChromaticDispersion || enableChromaticAberration) "✅" else "⏭️"}
+                    |  4️⃣ 最终处理: ${String.format("%.3f", finalizeTime)}ms
+                    |  ⏱️ 总耗时: ${String.format("%.3f", totalTime)}ms (~${(1000f / totalTime).toInt()} FPS)
+                    |  💾 缓存状态: blur=${!blurDirty}, aberration=${!aberrationDirty}, dispersion=${!dispersionDirty}
+                """.trimMargin())
             }
         }
 
@@ -746,6 +927,33 @@ class LiquidGlassView @JvmOverloads constructor(
         if (ENABLE_MEMORY_LOG) {
             logMemoryUsage()
         }
+    }
+
+    /**
+     * 对背景位图做稀疏抽样校验和，用于检测背景内容是否变化
+     *
+     * 背景位图已经过下采样，最多采样 8x8=64 个像素，开销可忽略。
+     * 抽样有极小概率漏检（变化恰好都落在采样点之间），
+     * 需要严格逐帧刷新的场景请开启 enableDynamicBackground。
+     */
+    private fun computeBackdropSignature(bitmap: Bitmap): Int {
+        val w = bitmap.width
+        val h = bitmap.height
+        if (w <= 0 || h <= 0) return 0
+
+        var hash = w * 31 + h
+        val stepX = (w / BACKDROP_SAMPLE_GRID).coerceAtLeast(1)
+        val stepY = (h / BACKDROP_SAMPLE_GRID).coerceAtLeast(1)
+        var y = stepY / 2
+        while (y < h) {
+            var x = stepX / 2
+            while (x < w) {
+                hash = hash * 31 + bitmap.getPixel(x, y)
+                x += stepX
+            }
+            y += stepY
+        }
+        return hash
     }
 
     /**
@@ -865,6 +1073,12 @@ class LiquidGlassView @JvmOverloads constructor(
         // ✅ 清理所有缓存和资源
         scaleAnimator?.cancel()
         enhancedBlurEffect.release()  // 清理增强模糊效果
+
+        // 清理 GPU 渲染器
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            hardwareBlur?.release()
+        }
+        hardwareBlur = null
 
         // ✅ 清理效果处理器
         chromaticAberrationEffect.cleanup()

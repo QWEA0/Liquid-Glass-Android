@@ -1,0 +1,247 @@
+/**
+ * API 31+ 的全 GPU 背景渲染器
+ *
+ * 原理：
+ * 1. 把父视图的绘制录制进一个 RenderNode（跳过玻璃视图自身）
+ * 2. 在 RenderNode 上挂 RenderEffect 链（全部 GPU 执行）：
+ *    模糊 → 色差（API 33+ RuntimeShader）→ 饱和度 colorFilter
+ * 3. 直接 drawRenderNode 到目标画布
+ *
+ * 相比 CPU 管线的优势：
+ * - 零 Bitmap 分配（无 GC 压力）
+ * - 零 CPU 像素处理（模糊/色差由 GPU 完成）
+ * - 零 GPU→CPU 回读（不经过软件 Canvas 截图）
+ * - 背景是"活"的：滚动/动画背景无需任何缓存失效逻辑
+ *
+ * 色差着色器与 CPU 实现（ChromaticAberrationEffect）语义一致：
+ * 从位移贴图读取 (dx, dy)，对 R/G/B 三通道分别加上各自的偏移量采样。
+ */
+package com.example.liquidglass
+
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
+import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Path
+import android.graphics.RenderEffect
+import android.graphics.RenderNode
+import android.graphics.RuntimeShader
+import android.graphics.Shader
+import android.os.Build
+import android.view.View
+import androidx.annotation.RequiresApi
+
+@RequiresApi(Build.VERSION_CODES.S)
+internal class HardwareBackdropBlur {
+
+    companion object {
+        /** 色差 RuntimeShader 需要 API 33+ */
+        fun supportsRuntimeShader(): Boolean =
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+
+        /**
+         * 色差 AGSL 着色器
+         *
+         * 与 CPU 实现对应关系：
+         * - baseDx = (mapR - 128) * scale / 255  ≈  (m.r - 0.5) * displacementScale
+         * - 每个通道在 x、y 上都加上自己的偏移量（channelOffsets 已含 intensity）
+         * - alpha 取原位置的值
+         */
+        private const val ABERRATION_AGSL = """
+            uniform shader content;
+            uniform shader dispMap;
+            uniform float2 dispCoordScale;
+            uniform float displacementScale;
+            uniform float3 channelOffsets;
+
+            half4 main(float2 coord) {
+                half4 m = dispMap.eval(coord * dispCoordScale);
+                float2 base = float2((float(m.r) - 0.5) * displacementScale,
+                                     (float(m.g) - 0.5) * displacementScale);
+                half r = content.eval(coord + base + channelOffsets.x).r;
+                half g = content.eval(coord + base + channelOffsets.y).g;
+                half b = content.eval(coord + base + channelOffsets.z).b;
+                half a = content.eval(coord).a;
+                return half4(r, g, b, a);
+            }
+        """
+    }
+
+    /**
+     * 色差参数（null = 不启用色差）
+     *
+     * @param displacementMap 位移贴图（R=dx, G=dy，128 为零位移）
+     * @param displacementScale 位移缩放（overLight 时调用方应减半）
+     * @param redOffset 红色通道偏移（已乘 intensity）
+     * @param greenOffset 绿色通道偏移（已乘 intensity）
+     * @param blueOffset 蓝色通道偏移（已乘 intensity）
+     */
+    data class AberrationParams(
+        val displacementMap: Bitmap,
+        val displacementScale: Float,
+        val redOffset: Float,
+        val greenOffset: Float,
+        val blueOffset: Float
+    )
+
+    private val renderNode = RenderNode("LiquidGlassBackdrop")
+
+    // 仅参数变化时重建 RenderEffect
+    private var lastBlurRadius = Float.NaN
+    private var lastSaturation = Float.NaN
+    private var lastAberration: AberrationParams? = null
+    private var lastWidth = 0
+    private var lastHeight = 0
+    private var effectBuilt = false
+
+    private var aberrationShader: RuntimeShader? = null
+
+    private val location = IntArray(2)
+    private val parentLocation = IntArray(2)
+
+    /**
+     * 绘制处理后的背景到目标画布
+     *
+     * @param canvas 目标画布（必须硬件加速）
+     * @param glassView 玻璃视图（用于定位与跳过自绘）
+     * @param blurRadius 模糊半径（像素，0 表示不模糊）
+     * @param saturation 饱和度（100 = 原始）
+     * @param clipPath 圆角裁剪路径
+     * @param aberration 色差参数（null = 不启用；需 API 33+，否则忽略并返回 false）
+     * @return 是否成功绘制；false 时调用方应回退到 CPU 管线
+     */
+    fun draw(
+        canvas: Canvas,
+        glassView: LiquidGlassView,
+        blurRadius: Float,
+        saturation: Float,
+        clipPath: Path,
+        aberration: AberrationParams? = null
+    ): Boolean {
+        if (!canvas.isHardwareAccelerated) return false
+        if (aberration != null && !supportsRuntimeShader()) return false
+        val parent = glassView.parent as? View ?: return false
+        val width = glassView.width
+        val height = glassView.height
+        if (width <= 0 || height <= 0) return false
+
+        if (!effectBuilt ||
+            blurRadius != lastBlurRadius ||
+            saturation != lastSaturation ||
+            aberration != lastAberration ||
+            width != lastWidth ||
+            height != lastHeight
+        ) {
+            renderNode.setRenderEffect(buildEffect(blurRadius, saturation, aberration, width, height))
+            lastBlurRadius = blurRadius
+            lastSaturation = saturation
+            lastAberration = aberration
+            lastWidth = width
+            lastHeight = height
+            effectBuilt = true
+        }
+
+        // 计算相对父视图的偏移（用窗口坐标差，兼容滚动容器）
+        glassView.getLocationInWindow(location)
+        parent.getLocationInWindow(parentLocation)
+        val offsetX = (location[0] - parentLocation[0]).toFloat()
+        val offsetY = (location[1] - parentLocation[1]).toFloat()
+
+        renderNode.setPosition(0, 0, width, height)
+        val recordingCanvas = renderNode.beginRecording(width, height)
+        try {
+            recordingCanvas.translate(-offsetX, -offsetY)
+            glassView.isCapturingBackdrop = true
+            // ⚠️ 硬件画布上父视图绘制子视图走的是 updateDisplayListIfDirty，
+            // 不会经过 View.draw(Canvas)，所以 isCapturingBackdrop 拦截不到自己，
+            // 会对正在录制中的 RenderNode 重入 beginRecording 导致崩溃。
+            // setTransitionVisibility 只改可见性标志、不触发 invalidate，
+            // 让父视图 dispatchDraw 直接跳过本视图。
+            glassView.setTransitionVisibility(View.INVISIBLE)
+            try {
+                parent.draw(recordingCanvas)
+            } finally {
+                glassView.setTransitionVisibility(View.VISIBLE)
+                glassView.isCapturingBackdrop = false
+            }
+        } finally {
+            renderNode.endRecording()
+        }
+
+        val saveCount = canvas.save()
+        canvas.clipPath(clipPath)
+        canvas.drawRenderNode(renderNode)
+        canvas.restoreToCount(saveCount)
+        return true
+    }
+
+    /**
+     * 构建效果链：模糊 → 色差 → 饱和度（内层先执行）
+     */
+    private fun buildEffect(
+        blurRadius: Float,
+        saturation: Float,
+        aberration: AberrationParams?,
+        width: Int,
+        height: Int
+    ): RenderEffect? {
+        var effect: RenderEffect? = if (blurRadius > 0f) {
+            RenderEffect.createBlurEffect(blurRadius, blurRadius, Shader.TileMode.CLAMP)
+        } else {
+            null
+        }
+
+        if (aberration != null && supportsRuntimeShader()) {
+            val aberrationEffect = buildAberrationEffect(aberration, width, height)
+            effect = if (effect != null) {
+                RenderEffect.createChainEffect(aberrationEffect, effect)
+            } else {
+                aberrationEffect
+            }
+        }
+
+        if (saturation != 100f) {
+            val satEffect = RenderEffect.createColorFilterEffect(
+                ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(saturation / 100f) })
+            )
+            effect = if (effect != null) {
+                RenderEffect.createChainEffect(satEffect, effect)
+            } else {
+                satEffect
+            }
+        }
+
+        return effect
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun buildAberrationEffect(params: AberrationParams, width: Int, height: Int): RenderEffect {
+        val shader = aberrationShader ?: RuntimeShader(ABERRATION_AGSL).also { aberrationShader = it }
+
+        shader.setInputShader(
+            "dispMap",
+            BitmapShader(params.displacementMap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+        )
+        // 位移贴图尺寸可能与视图不同（生成滞后一帧），按比例映射采样坐标
+        shader.setFloatUniform(
+            "dispCoordScale",
+            params.displacementMap.width.toFloat() / width,
+            params.displacementMap.height.toFloat() / height
+        )
+        shader.setFloatUniform("displacementScale", params.displacementScale)
+        shader.setFloatUniform(
+            "channelOffsets",
+            params.redOffset,
+            params.greenOffset,
+            params.blueOffset
+        )
+
+        return RenderEffect.createRuntimeShaderEffect(shader, "content")
+    }
+
+    fun release() {
+        renderNode.discardDisplayList()
+        aberrationShader = null
+    }
+}

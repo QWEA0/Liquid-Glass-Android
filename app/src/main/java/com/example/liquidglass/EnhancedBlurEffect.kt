@@ -23,7 +23,7 @@
  * blurEffect.highQuality = false
  * blurEffect.enableOptimizedCapture = true
  * blurEffect.cornerRadius = 24f
- * val blurred = blurEffect.applyEffect(backdrop, blurRadius, saturation)
+ * val blurred = blurEffect.applyEffect(backdrop, blurRadius)
  * ```
  */
 package com.example.liquidglass
@@ -90,9 +90,11 @@ class EnhancedBlurEffect(
      * 捕获视图背后的背景
      *
      * @param bounds 视图边界
-     * @return 背景 Bitmap
+     * @param downsample 下采样比例 (0-1]。小于 1 时直接在缩小的 Canvas 上绘制父视图，
+     *                   避免"全尺寸截图 + 二次缩放"的额外分配和拷贝
+     * @return 背景 Bitmap（尺寸为 bounds * downsample）
      */
-    fun captureBackdrop(bounds: RectF): Bitmap? {
+    fun captureBackdrop(bounds: RectF, downsample: Float = 1f): Bitmap? {
         val parent = view.parent as? View ?: return null
 
         // ✅ 优化捕获范围：根据是否启用优化捕获来决定捕获区域
@@ -103,9 +105,10 @@ class EnhancedBlurEffect(
             bounds
         }
 
-        // 创建背景 Bitmap
-        val width = captureBounds.width().toInt().coerceAtLeast(1)
-        val height = captureBounds.height().toInt().coerceAtLeast(1)
+        // 创建背景 Bitmap（按下采样比例缩小）
+        val scale = downsample.coerceIn(0.01f, 1f)
+        val width = (captureBounds.width() * scale).toInt().coerceAtLeast(1)
+        val height = (captureBounds.height() * scale).toInt().coerceAtLeast(1)
         val backdrop = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(backdrop)
 
@@ -120,12 +123,11 @@ class EnhancedBlurEffect(
             val offsetX = (location[0] - parentLocation[0]).toFloat()
             val offsetY = (location[1] - parentLocation[1]).toFloat()
 
-            // ✅ 平移画布到捕获区域的实际位置
+            // ✅ 先缩放再平移：父视图直接绘制到缩小的画布上
+            if (scale < 1f) {
+                canvas.scale(scale, scale)
+            }
             canvas.translate(-offsetX - captureBounds.left, -offsetY - captureBounds.top)
-
-            // 临时隐藏当前视图，避免绘制自己
-            val wasVisible = view.visibility
-            view.visibility = android.view.View.INVISIBLE
 
             // ✅ 如果启用优化捕获，应用圆角裁剪
             if (enableOptimizedCapture && cornerRadius > 0) {
@@ -141,10 +143,23 @@ class EnhancedBlurEffect(
             }
 
             // 绘制父视图(不包括当前视图)
-            parent.draw(canvas)
-
-            // 恢复视图可见性
-            view.visibility = wasVisible
+            // ✅ 通过 isCapturingBackdrop 标志让 LiquidGlassView 跳过自身绘制，
+            //    避免切换 visibility 触发父视图 invalidate 造成的额外重绘
+            val glassView = view as? LiquidGlassView
+            if (glassView != null) {
+                glassView.isCapturingBackdrop = true
+                try {
+                    parent.draw(canvas)
+                } finally {
+                    glassView.isCapturingBackdrop = false
+                }
+            } else {
+                // 非 LiquidGlassView 的兜底路径：仍用 visibility 方案
+                val wasVisible = view.visibility
+                view.visibility = View.INVISIBLE
+                parent.draw(canvas)
+                view.visibility = wasVisible
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to capture backdrop: ${e.message}")
             // 如果捕获失败，返回半透明白色背景
@@ -177,40 +192,24 @@ class EnhancedBlurEffect(
     }
     
     /**
-     * 应用模糊和饱和度效果
+     * 应用模糊效果
+     *
+     * 饱和度不在此处理：由 LiquidGlassView 在最终绘制时通过
+     * ColorMatrixColorFilter 应用（零成本，无需额外的全图复制 pass）
      *
      * @param backdrop 原始背景
      * @param blurRadius 模糊半径 (0-25)
-     * @param saturation 饱和度 (100 = 原始, 140 = 增强 40%)
      * @return 处理后的背景
      */
     fun applyEffect(
         backdrop: Bitmap,
-        blurRadius: Float,
-        saturation: Float
+        blurRadius: Float
     ): Bitmap {
-        var result = backdrop
-        var intermediate: Bitmap? = null
-
-        // 1. 应用模糊
-        if (blurRadius > 0f) {
-            result = applyBlur(result, blurRadius)
-            if (result != backdrop) {
-                intermediate = result  // 保存中间结果以便后续回收
-            }
+        return if (blurRadius > 0f) {
+            applyBlur(backdrop, blurRadius)
+        } else {
+            backdrop
         }
-
-        // 2. 应用饱和度
-        if (saturation != 100f) {
-            val saturated = applySaturation(result, saturation / 100f)
-            // 如果有中间结果且不是最终结果，回收它
-            if (intermediate != null && saturated != intermediate) {
-                intermediate.recycle()
-            }
-            result = saturated
-        }
-
-        return result
     }
     
     /**
@@ -361,28 +360,6 @@ class EnhancedBlurEffect(
             // 回退到智能模糊
             return applySmartBlur(bitmap, sigma)
         }
-    }
-    
-    /**
-     * 应用饱和度调整
-     * 
-     * @param bitmap 原始图像
-     * @param saturation 饱和度系数 (1.0 = 原始, 1.4 = 增强 40%)
-     * @return 调整后的图像
-     */
-    private fun applySaturation(bitmap: Bitmap, saturation: Float): Bitmap {
-        val result = bitmap.copy(bitmap.config ?: Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(result)
-        val paint = Paint()
-        
-        // 使用 ColorMatrix 调整饱和度
-        val colorMatrix = ColorMatrix()
-        colorMatrix.setSaturation(saturation)
-        paint.colorFilter = ColorMatrixColorFilter(colorMatrix)
-        
-        canvas.drawBitmap(bitmap, 0f, 0f, paint)
-        
-        return result
     }
     
     /**
