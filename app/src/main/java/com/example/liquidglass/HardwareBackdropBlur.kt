@@ -59,9 +59,15 @@ internal class HardwareBackdropBlur {
                 half4 m = dispMap.eval(coord * dispCoordScale);
                 float2 base = float2((float(m.r) - 0.5) * displacementScale,
                                      (float(m.g) - 0.5) * displacementScale);
-                half r = content.eval(coord + base + channelOffsets.x).r;
-                half g = content.eval(coord + base + channelOffsets.y).g;
-                half b = content.eval(coord + base + channelOffsets.z).b;
+                // 通道偏移沿位移方向应用（标量直接相加会广播成 45° 对角偏移）
+                float bl = length(base);
+                float2 dir = float2(0.0);
+                if (bl > 0.001) {
+                    dir = base / bl;
+                }
+                half r = content.eval(coord + base + dir * channelOffsets.x).r;
+                half g = content.eval(coord + base + dir * channelOffsets.y).g;
+                half b = content.eval(coord + base + dir * channelOffsets.z).b;
                 half a = content.eval(coord).a;
                 return half4(r, g, b, a);
             }

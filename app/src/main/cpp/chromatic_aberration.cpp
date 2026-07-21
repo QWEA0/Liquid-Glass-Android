@@ -213,6 +213,16 @@ void chromatic_aberration_rgba8888(
             float baseDx = (static_cast<float>(mapR) - 128.0f) * scaleFactor;
             float baseDy = (static_cast<float>(mapG) - 128.0f) * scaleFactor;
 
+            // ✅ 通道偏移沿位移方向应用
+            // （旧实现把标量同时加到 x/y 上，等于固定沿 45° 对角线偏移）
+            float baseLen = std::sqrt(baseDx * baseDx + baseDy * baseDy);
+            float dirX = 0.0f;
+            float dirY = 0.0f;
+            if (baseLen > 0.001f) {
+                dirX = baseDx / baseLen;
+                dirY = baseDy / baseLen;
+            }
+
             // 调试：打印中心像素的信息和位移贴图值
             if (x == width / 2 && y == height / 2) {
                 LOGD("C++ center pixel: BGRA=(%d,%d,%d,%d), baseDx=%.3f, baseDy=%.3f, offsets=(%.3f, %.3f, %.3f)",
@@ -226,14 +236,14 @@ void chromatic_aberration_rgba8888(
                      x, y, mapB, mapG, mapR, mapA, baseDx, baseDy);
             }
 
-            // 计算三个通道的采样位置（每个通道有不同的位移）
+            // 计算三个通道的采样位置（每个通道沿位移方向有不同的偏移量）
             // 注意：与 Kotlin 实现完全一致
-            float rSrcX = x + baseDx + actualRedOffset;
-            float rSrcY = y + baseDy + actualRedOffset;
-            float gSrcX = x + baseDx + actualGreenOffset;
-            float gSrcY = y + baseDy + actualGreenOffset;
-            float bSrcX = x + baseDx + actualBlueOffset;
-            float bSrcY = y + baseDy + actualBlueOffset;
+            float rSrcX = x + baseDx + dirX * actualRedOffset;
+            float rSrcY = y + baseDy + dirY * actualRedOffset;
+            float gSrcX = x + baseDx + dirX * actualGreenOffset;
+            float gSrcY = y + baseDy + dirY * actualGreenOffset;
+            float bSrcX = x + baseDx + dirX * actualBlueOffset;
+            float bSrcY = y + baseDy + dirY * actualBlueOffset;
 
             // ✅ 根据设置选择采样方法
             uint8_t r, g, b;

@@ -296,13 +296,26 @@ class ChromaticAberrationEffect {
                 val baseDx = (Color.red(mapColor) - 128) * scaleFactor
                 val baseDy = (Color.green(mapColor) - 128) * scaleFactor
 
-                // 采样三个通道（每个通道有不同的位移）
-                val rSrcX = x + baseDx + actualRedOffset
-                val rSrcY = y + baseDy + actualRedOffset
-                val gSrcX = x + baseDx + actualGreenOffset
-                val gSrcY = y + baseDy + actualGreenOffset
-                val bSrcX = x + baseDx + actualBlueOffset
-                val bSrcY = y + baseDy + actualBlueOffset
+                // ✅ 通道偏移沿位移方向应用
+                // （旧实现把标量同时加到 x/y 上，等于固定沿 45° 对角线偏移）
+                val baseLen = kotlin.math.sqrt(baseDx * baseDx + baseDy * baseDy)
+                val dirX: Float
+                val dirY: Float
+                if (baseLen > 0.001f) {
+                    dirX = baseDx / baseLen
+                    dirY = baseDy / baseLen
+                } else {
+                    dirX = 0f
+                    dirY = 0f
+                }
+
+                // 采样三个通道（每个通道沿位移方向有不同的偏移量）
+                val rSrcX = x + baseDx + dirX * actualRedOffset
+                val rSrcY = y + baseDy + dirY * actualRedOffset
+                val gSrcX = x + baseDx + dirX * actualGreenOffset
+                val gSrcY = y + baseDy + dirY * actualGreenOffset
+                val bSrcX = x + baseDx + dirX * actualBlueOffset
+                val bSrcY = y + baseDy + dirY * actualBlueOffset
 
                 // ✅ 根据设置选择采样方法
                 val r: Int
