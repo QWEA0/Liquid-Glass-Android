@@ -51,6 +51,13 @@ class LiquidGlassView @JvmOverloads constructor(
 
         // 背景变化检测的抽样网格（8x8 = 最多 64 个采样点）
         private const val BACKDROP_SAMPLE_GRID = 8
+
+        /**
+         * 全局亮度采样标志：BackdropLuminanceMeter 采样父视图期间为 true，
+         * 所有玻璃视图跳过自绘 —— 既避免玻璃影响自己的亮度读数，
+         * 也防止采样画布（软件渲染）级联触发其他玻璃视图的完整 CPU 管线
+         */
+        internal var isLuminanceSampling = false
     }
 
     // ✅ 效果开关
@@ -290,6 +297,138 @@ class LiquidGlassView @JvmOverloads constructor(
             }
         }
 
+    // ==================== Liquid Glass 2.0（API 33+ 统一透镜管线） ====================
+
+    /**
+     * 允许使用 API 33+ 的统一透镜着色器管线（SDF 折射 + 色散 + 高光 + 内阴影 + 融合）
+     *
+     * 渲染路径优先级：
+     * - useShaderPipeline && useHardwareBlurWhenPossible && API 33+ → 透镜管线（2.0）
+     * - useHardwareBlurWhenPossible && API 31+ → 旧 GPU 管线（模糊+饱和度+旧色差）
+     * - 否则 → CPU 管线
+     */
+    var useShaderPipeline = true
+        set(value) {
+            if (field != value) {
+                field = value
+                if (!value) ensureDisplacementMaps()
+                updateSensorRegistration()
+                blurDirty = true
+                aberrationDirty = true
+                invalidate()
+            }
+        }
+
+    /** 材质变体（REGULAR=自适应染色重可读性 / CLEAR=高透+压暗层） */
+    var material = GlassMaterial.REGULAR
+        set(value) {
+            if (field != value) {
+                field = value
+                updateAdaptiveMeter()
+                blurDirty = true
+                invalidate()
+            }
+        }
+
+    /** 边缘斜面带宽度（px）：玻璃"厚度"的视觉宽度（仅透镜管线） */
+    var bevelWidth = 40f
+        set(value) {
+            val clamped = value.coerceIn(2f, 200f)
+            if (field != clamped) {
+                field = clamped
+                invalidate()
+            }
+        }
+
+    /** 边缘最大折射位移（px）：透镜弯折强度（仅透镜管线；采样有安全钳制，大值也不会越界） */
+    var refractionHeight = 200f
+        set(value) {
+            val clamped = value.coerceIn(0f, 300f)
+            if (field != clamped) {
+                field = clamped
+                invalidate()
+            }
+        }
+
+    /** 色散强度（0-1）：三通道折射差异，边缘光谱边纹宽度（仅透镜管线） */
+    var dispersionStrength = 0.10f
+        set(value) {
+            val clamped = value.coerceIn(0f, 1f)
+            if (field != clamped) {
+                field = clamped
+                invalidate()
+            }
+        }
+
+    /** 高光跟随重力传感器（光源固定在"世界"里，倾斜设备时高光移动；仅透镜管线，默认关闭） */
+    var enableSensorHighlight = false
+        set(value) {
+            if (field != value) {
+                field = value
+                updateSensorRegistration()
+                invalidate()
+            }
+        }
+
+    /** 背景亮度自适应染色（Regular 材质；持续采样背景明暗并联动前景外观回调；默认关闭） */
+    var enableAdaptiveTint = false
+        set(value) {
+            if (field != value) {
+                field = value
+                updateAdaptiveMeter()
+                invalidate()
+            }
+        }
+
+    /** 无障碍渲染模式（AUTO 跟随系统「高对比度文字」自动退化为不透明材质） */
+    var accessibilityMode = GlassAccessibilityMode.AUTO
+        set(value) {
+            if (field != value) {
+                field = value
+                refreshAccessibilityState()
+            }
+        }
+
+    /**
+     * 玻璃外观变化回调：背景明暗越过阈值时触发（带滞回）
+     *
+     * @param isOverLight true = 亮背景，前景内容建议切换为深色
+     */
+    var glassAppearanceListener: ((isOverLight: Boolean) -> Unit)? = null
+
+    /** 当前是否判定为亮背景（自适应开启时由亮度采样驱动，否则等于 [overLight]） */
+    val isOverLightBackground: Boolean
+        get() = if (enableAdaptiveTint && material.adaptiveTint) adaptiveOverLight else overLight
+
+    // 透镜管线内部状态
+    private var lensRenderer: GlassLensRenderer? = null
+    private var primaryShape: RectF? = null       // null = 视图整体
+    private var primaryShapeCorner = 0f
+    private var secondaryShape: RectF? = null
+    private var secondaryShapeCorner = 999f
+    private var shapeBlendSmoothing = 48f
+
+    // 按压/触摸液态状态（透镜管线 uniform）
+    private var pressDepth = 0f
+    private var pressAnimator: ValueAnimator? = null
+
+    // 亮度自适应
+    private var luminanceMeter: BackdropLuminanceMeter? = null
+    private var adaptiveOverLight = false
+    private var adaptiveTintColor = 0x24FFFFFF
+    private var lastAppliedTint = 0
+
+    // 无障碍状态缓存（attach 时刷新，宿主可调用 refreshAccessibilityState 主动刷新）
+    private var a11yReducedTransparency = false
+    private var a11yReducedMotion = false
+    private var a11yPowerSave = false
+    private val opaquePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val opaqueBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1.5f
+    }
+    private val tintOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+
     // 效果处理器
     private val enhancedBlurEffect = EnhancedBlurEffect(this)  // 增强模糊效果
     private val chromaticAberrationEffect = ChromaticAberrationEffect()
@@ -336,9 +475,10 @@ class LiquidGlassView @JvmOverloads constructor(
     // 自定义背景捕获器
     private var customBackdropCapture: ((RectF) -> Bitmap?)? = null
 
-    // 位移贴图缓存（跨 detach 保留，仅尺寸变化时重建）
+    // 位移贴图缓存（跨 detach 保留，仅尺寸变化时重建；透镜管线不需要）
     private var displacementMaps: Map<DisplacementMode, Bitmap>? = null
     private var mapGenerationId = 0  // 异步生成版本号，防止过期结果覆盖
+    private var mapGenerationPending = false  // 防止旧管线每帧重复触发生成
 
     // ✅ 智能缓存机制 - 分层缓存策略
     private var cachedBackdrop: Bitmap? = null          // L1: 原始背景
@@ -427,6 +567,8 @@ class LiquidGlassView @JvmOverloads constructor(
         set(value) {
             if (field != value) {
                 field = value
+                if (!value) ensureDisplacementMaps()
+                updateSensorRegistration()
                 blurDirty = true
                 aberrationDirty = true
                 invalidate()
@@ -464,20 +606,79 @@ class LiquidGlassView @JvmOverloads constructor(
         // ✅ 启用硬件加速 - 性能提升 60-80%
         setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
+        // XML 属性解析（README 承诺的 app:xxx 属性在此生效）
+        attrs?.let { parseAttributes(context, it) }
+
         // 初始化阴影
         updateShadow()
 
         // 初始化饱和度滤镜
         updateSaturationFilter()
 
-        // 异步生成位移贴图
+        // 异步生成位移贴图（透镜管线不需要，跳过以省一次后台计算）
         post {
-            generateDisplacementMaps()
+            maybeGenerateDisplacementMaps()
         }
+    }
+
+    /**
+     * 解析 XML 属性
+     */
+    private fun parseAttributes(context: Context, attrs: AttributeSet) {
+        val ta = context.obtainStyledAttributes(attrs, R.styleable.LiquidGlassView)
+        try {
+            displacementScale = ta.getFloat(R.styleable.LiquidGlassView_displacementScale, displacementScale)
+            blurAmount = ta.getFloat(R.styleable.LiquidGlassView_blurAmount, blurAmount)
+            saturation = ta.getFloat(R.styleable.LiquidGlassView_saturation, saturation)
+            aberrationIntensity = ta.getFloat(R.styleable.LiquidGlassView_aberrationIntensity, aberrationIntensity)
+            elasticity = ta.getFloat(R.styleable.LiquidGlassView_elasticity, elasticity)
+            cornerRadius = ta.getDimension(R.styleable.LiquidGlassView_cornerRadius, cornerRadius)
+            bevelWidth = ta.getDimension(R.styleable.LiquidGlassView_bevelWidth, bevelWidth)
+            refractionHeight = ta.getDimension(R.styleable.LiquidGlassView_refractionHeight, refractionHeight)
+            dispersionStrength = ta.getFloat(R.styleable.LiquidGlassView_dispersionStrength, dispersionStrength)
+            enableSensorHighlight = ta.getBoolean(R.styleable.LiquidGlassView_sensorHighlight, enableSensorHighlight)
+            enableAdaptiveTint = ta.getBoolean(R.styleable.LiquidGlassView_adaptiveTint, enableAdaptiveTint)
+            material = if (ta.getInt(R.styleable.LiquidGlassView_glassMaterial, 0) == 1) {
+                GlassMaterial.CLEAR
+            } else {
+                GlassMaterial.REGULAR
+            }
+        } finally {
+            ta.recycle()
+        }
+    }
+
+    // ==================== 液态融合形状 API（仅透镜管线） ====================
+
+    /**
+     * 设置主玻璃形状（视图局部坐标，px）
+     *
+     * 默认 null = 玻璃充满整个视图（圆角为 [cornerRadius]）。
+     * 液态融合场景下可在一个大视图内自定义玻璃几何。
+     */
+    fun setPrimaryShape(rect: RectF?, cornerRadiusPx: Float = cornerRadius) {
+        primaryShape = rect?.let { RectF(it) }
+        primaryShapeCorner = cornerRadiusPx
+        invalidate()
+    }
+
+    /**
+     * 设置副玻璃形状（液态融合的第二个玻璃体；null = 移除）
+     *
+     * 两个形状用 smin 平滑并集融合：接近时边缘像水银一样黏连、合并。
+     *
+     * @param smoothing smin 平滑宽度（px）——越大黏连范围越大
+     */
+    fun setSecondaryShape(rect: RectF?, cornerRadiusPx: Float = 999f, smoothing: Float = 48f) {
+        secondaryShape = rect?.let { RectF(it) }
+        secondaryShapeCorner = cornerRadiusPx
+        shapeBlendSmoothing = smoothing.coerceIn(0f, 200f)
+        invalidate()
     }
 
     override fun draw(canvas: Canvas) {
         if (isCapturingBackdrop) return
+        if (isLuminanceSampling) return
         super.draw(canvas)
     }
 
@@ -505,20 +706,40 @@ class LiquidGlassView @JvmOverloads constructor(
         if (w <= 0 || h <= 0) return
 
         val genId = ++mapGenerationId
+        mapGenerationPending = true
         Thread({
             val maps = DisplacementMapGenerator.generateStandardMaps(w, h)
             post {
                 // 生成期间尺寸又变了/有更新的请求 → 丢弃本次结果
                 if (genId != mapGenerationId || w != width || h != height) {
                     maps.values.forEach { it.recycle() }
+                    if (genId == mapGenerationId) mapGenerationPending = false
                     return@post
                 }
                 displacementMaps?.values?.forEach { it.recycle() }
                 displacementMaps = maps
+                mapGenerationPending = false
                 aberrationDirty = true
                 invalidate()
             }
         }, "LiquidGlass-DispMap").start()
+    }
+
+    /** 透镜管线（API 33+）不使用位移贴图；仅旧管线可能用到时才生成 */
+    private fun lensPathLikely(): Boolean =
+        useShaderPipeline && useHardwareBlurWhenPossible &&
+            GlassLensRenderer.isSupported() && lensRenderer?.isAvailable != false
+
+    private fun maybeGenerateDisplacementMaps() {
+        if (lensPathLikely()) return
+        generateDisplacementMaps()
+    }
+
+    /** 旧管线需要位移贴图但尚未生成时补一次生成 */
+    private fun ensureDisplacementMaps() {
+        if (displacementMaps == null && !mapGenerationPending && width > 0 && height > 0) {
+            generateDisplacementMaps()
+        }
     }
     
     /**
@@ -535,9 +756,9 @@ class LiquidGlassView @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
 
-        // 重新生成位移贴图
+        // 重新生成位移贴图（透镜管线跳过）
         if (w > 0 && h > 0) {
-            generateDisplacementMaps()
+            maybeGenerateDisplacementMaps()
         }
 
         // 更新圆角裁剪路径
@@ -618,7 +839,22 @@ class LiquidGlassView @JvmOverloads constructor(
         val bounds = RectF(0f, 0f, width.toFloat(), height.toFloat())
         val calculatedBlurRadius = (if (overLight) 12f else 4f) + blurAmount * 32f
 
-        // ✅ API 31+ 全 GPU 快速路径（模糊+饱和度，零拷贝）
+        // ✅ 无障碍降级：不透明材质（Reduce Transparency）
+        if (shouldRenderOpaque()) {
+            drawOpaqueFallback(canvas)
+            return
+        }
+
+        // ✅ API 33+ 统一透镜管线（Liquid Glass 2.0：折射+色散+高光+内阴影+融合）
+        if (tryDrawLensGlass(canvas, calculatedBlurRadius)) {
+            // 边缘高光由着色器的法线光照完成，无需 Kotlin 层描边
+            if (enableDynamicBackground) {
+                invalidate()
+            }
+            return
+        }
+
+        // ✅ API 31+ 旧 GPU 快速路径（模糊+饱和度，零拷贝）
         if (tryDrawHardwareBlur(canvas, calculatedBlurRadius)) {
             if (enableEdgeHighlight) {
                 drawEdgeHighlight(canvas, bounds)
@@ -627,6 +863,11 @@ class LiquidGlassView @JvmOverloads constructor(
                 invalidate()
             }
             return
+        }
+
+        // 旧管线需要位移贴图（透镜管线跳过了生成，回退时补上）
+        if (enableChromaticAberration && displacementMaps == null) {
+            ensureDisplacementMaps()
         }
 
         // 直接调用渲染逻辑
@@ -642,6 +883,13 @@ class LiquidGlassView @JvmOverloads constructor(
                 resultDstRect.set(0, 0, width, height)
                 canvas.drawBitmap(it, resultSrcRect, resultDstRect, paint)
 
+                // 自适应染色 / 材质染色（CPU 路径用覆盖层近似透镜管线的 tint）
+                val tint = currentTintColor()
+                if (Color.alpha(tint) > 0) {
+                    tintOverlayPaint.color = tint
+                    canvas.drawPath(clipPath, tintOverlayPaint)
+                }
+
                 canvas.restoreToCount(saveCount)
             }
         }
@@ -655,6 +903,234 @@ class LiquidGlassView @JvmOverloads constructor(
         if (enableDynamicBackground) {
             invalidate()
         }
+    }
+
+    // ==================== 透镜管线（Liquid Glass 2.0） ====================
+
+    /**
+     * 尝试走 API 33+ 统一透镜着色器管线
+     *
+     * 覆盖：模糊、饱和度、SDF 折射、色散、法线镜面高光（传感器光源）、
+     * 内阴影、自适应染色、Clear 压暗、按压液态、双形状 smin 融合。
+     * 自定义背景捕获仍走 CPU 管线。
+     *
+     * @return true 表示已完成绘制
+     */
+    private fun tryDrawLensGlass(canvas: Canvas, blurRadius: Float): Boolean {
+        if (!useShaderPipeline || !useHardwareBlurWhenPossible) return false
+        if (!GlassLensRenderer.isSupported()) return false
+        if (!canvas.isHardwareAccelerated) return false
+        if (customBackdropCapture != null) return false
+
+        val renderer = lensRenderer ?: GlassLensRenderer().also { lensRenderer = it }
+        if (!renderer.isAvailable) return false
+
+        val startNs = if (collectFrameStats) System.nanoTime() else 0L
+
+        val w = width.toFloat()
+        val h = height.toFloat()
+
+        // —— 形状（主形状默认充满视图） ——
+        val p1 = primaryShape
+        val s1cx = p1?.centerX() ?: (w / 2f)
+        val s1cy = p1?.centerY() ?: (h / 2f)
+        val s1hw = ((p1?.width() ?: w) / 2f).coerceAtLeast(1f)
+        val s1hh = ((p1?.height() ?: h) / 2f).coerceAtLeast(1f)
+        val r1 = (if (p1 != null) primaryShapeCorner else cornerRadius).coerceIn(0f, min(s1hw, s1hh))
+
+        val p2 = secondaryShape
+        val s2hw = if (p2 != null) (p2.width() / 2f).coerceAtLeast(1f) else 0f
+        val s2hh = if (p2 != null) (p2.height() / 2f).coerceAtLeast(1f) else 0f
+        val r2 = if (p2 != null) secondaryShapeCorner.coerceIn(0f, min(s2hw, s2hh)) else 0f
+
+        // —— 色散：色差/色散任一开启即生效，量级沿用对应滑杆 ——
+        val disp = when {
+            enableChromaticDispersion ->
+                (dispersionStrength * (dispersionGain / 7f)).coerceIn(0f, 0.9f)
+            enableChromaticAberration && aberrationIntensity > 0f ->
+                (dispersionStrength * (aberrationIntensity / 2f)).coerceIn(0f, 0.9f)
+            else -> 0f
+        }
+
+        // —— 高光：沿用边缘高光开关/不透明度，乘材质增益 ——
+        val spec = if (enableEdgeHighlight) (edgeHighlightOpacity / 100f) * material.specBoost else 0f
+
+        // —— 光源方向（量化到 0.005，避免静止时反复重建 effect） ——
+        val sensorActive = enableSensorHighlight && !a11yReducedMotion && !a11yPowerSave
+        val lx: Float
+        val ly: Float
+        if (sensorActive) {
+            lx = (LightSourceController.lightDirX * 200f).toInt() / 200f
+            ly = (LightSourceController.lightDirY * 200f).toInt() / 200f
+        } else {
+            lx = 0.0f
+            ly = 1.0f
+        }
+
+        // —— 模糊半径 × 材质缩放（量化到 0.5px） ——
+        val radius = if (enableBackdropBlur) {
+            ((blurRadius * material.blurScale) * 2f).toInt() / 2f
+        } else {
+            0f
+        }
+
+        // —— 按压/触摸（量化到 0.01） ——
+        val press = (pressDepth * 100f).toInt() / 100f
+        val tAmp = if (isPressed || press > 0f) press else 0f
+        val tx = (touchX * 2f).toInt() / 2f
+        val ty = (touchY * 2f).toInt() / 2f
+
+        val margin = computeLensMargin(radius)
+
+        val params = GlassLensRenderer.LensParams(
+            blurRadius = radius,
+            shape1CX = s1cx, shape1CY = s1cy, shape1HW = s1hw, shape1HH = s1hh, radius1 = r1,
+            shape2CX = p2?.centerX() ?: 0f, shape2CY = p2?.centerY() ?: 0f,
+            shape2HW = s2hw, shape2HH = s2hh, radius2 = r2,
+            blendK = if (p2 != null) shapeBlendSmoothing else 0f,
+            bevel = bevelWidth,
+            refract = refractionHeight,
+            dispersion = disp,
+            lightX = lx, lightY = ly,
+            spec = spec,
+            innerShadow = material.innerShadow,
+            tint = currentTintColor(),
+            dim = material.dimAmount,
+            saturation = saturation,
+            press = press,
+            touchX = tx, touchY = ty, touchAmp = tAmp
+        )
+
+        val ok = renderer.draw(canvas, this, params, margin)
+
+        if (ok && collectFrameStats) {
+            // GPU 路径只统计 CPU 侧的录制耗时（实际着色在 GPU 异步执行）
+            val totalMs = (System.nanoTime() - startNs) / 1_000_000f
+            val stats = FrameStats(
+                captureMs = 0f,
+                blurMs = 0f,
+                effectMs = 0f,
+                finalizeMs = 0f,
+                totalMs = totalMs,
+                effectName = "GPU透镜",
+                blurRecomputed = false,
+                effectRecomputed = false,
+                processedWidth = width,
+                processedHeight = height,
+                drawFps = measuredFps
+            )
+            lastFrameStats = stats
+            frameStatsListener?.invoke(stats)
+        }
+        return ok
+    }
+
+    /**
+     * 背景录制外扩边距：供模糊 pass 在视图边缘取到真实内容（约 3σ 拉入范围）
+     *
+     * 注意：折射采样是向内的（RuntimeShader 子输入越界会得到透明黑），
+     * margin 只服务于模糊质量。16px 对齐减少 effect 重建。
+     */
+    private fun computeLensMargin(blurRadius: Float): Int {
+        val need = max(blurRadius * 3f, 32f)
+        return (((need.toInt() + 15) / 16) * 16).coerceAtLeast(32)
+    }
+
+    /**
+     * 当前染色：自适应（亮度采样）或材质基础染色
+     */
+    private fun currentTintColor(): Int {
+        if (material.adaptiveTint && enableAdaptiveTint) {
+            return adaptiveTintColor
+        }
+        return if (overLight) 0x33000000 else material.baseTint
+    }
+
+    // ==================== 亮度自适应 ====================
+
+    /**
+     * 亮度样本回调（EMA 平滑后）：更新染色，越过明暗阈值时通知宿主
+     */
+    private fun onLuminanceSample(luminance: Float) {
+        // smoothstep(0.35, 0.75)：0 = 暗背景，1 = 亮背景
+        val s = ((luminance - 0.35f) / 0.40f).coerceIn(0f, 1f)
+        val e = s * s * (3f - 2f * s)
+
+        // 暗背景 → 白染色提亮玻璃；亮背景 → 黑染色压暗（保前景可读性）
+        val channel = ((1f - e) * 255f).toInt()
+        val alpha = ((0.14f + 0.08f * e) * 255f).toInt()
+        adaptiveTintColor = Color.argb(alpha, channel, channel, channel)
+
+        val meter = luminanceMeter
+        if (meter != null && meter.isOverLight != adaptiveOverLight) {
+            adaptiveOverLight = meter.isOverLight
+            glassAppearanceListener?.invoke(adaptiveOverLight)
+        }
+
+        if (adaptiveTintColor != lastAppliedTint) {
+            lastAppliedTint = adaptiveTintColor
+            invalidate()
+        }
+    }
+
+    private fun updateAdaptiveMeter() {
+        val want = isAttachedToWindow && enableAdaptiveTint && material.adaptiveTint
+        if (want) {
+            val meter = luminanceMeter
+                ?: BackdropLuminanceMeter(this) { onLuminanceSample(it) }.also { luminanceMeter = it }
+            meter.intervalMs = if (a11yPowerSave) 1000L else 350L
+            meter.start()
+        } else {
+            luminanceMeter?.stop()
+        }
+    }
+
+    // ==================== 传感器光源 ====================
+
+    private fun updateSensorRegistration() {
+        val want = isAttachedToWindow && enableSensorHighlight && useShaderPipeline &&
+            useHardwareBlurWhenPossible && GlassLensRenderer.isSupported() &&
+            !a11yReducedMotion && !a11yPowerSave
+        if (want) {
+            LightSourceController.register(this)
+        } else {
+            LightSourceController.unregister(this)
+        }
+    }
+
+    // ==================== 无障碍降级 ====================
+
+    /**
+     * 重新查询系统无障碍/省电状态（attach 时自动调用；设置变化后宿主可主动调用）
+     */
+    fun refreshAccessibilityState() {
+        a11yReducedTransparency = GlassAccessibility.prefersReducedTransparency(context)
+        a11yReducedMotion = GlassAccessibility.prefersReducedMotion(context)
+        a11yPowerSave = GlassAccessibility.isPowerSaveMode(context)
+        updateSensorRegistration()
+        updateAdaptiveMeter()
+        blurDirty = true
+        aberrationDirty = true
+        invalidate()
+    }
+
+    private fun shouldRenderOpaque(): Boolean = when (accessibilityMode) {
+        GlassAccessibilityMode.FORCE_OPAQUE -> true
+        GlassAccessibilityMode.FORCE_FULL -> false
+        GlassAccessibilityMode.AUTO -> a11yReducedTransparency
+    }
+
+    /**
+     * 不透明降级材质：实底圆角矩形 + 细边框（保证高对比度需求下的可读性）
+     */
+    private fun drawOpaqueFallback(canvas: Canvas) {
+        val over = isOverLightBackground
+        opaquePaint.color = if (over) 0xFFF2F2F6.toInt() else 0xFF2A2A2E.toInt()
+        opaqueBorderPaint.color = if (over) 0x33000000 else 0x40FFFFFF
+        val r = cornerRadius.coerceAtMost(min(width, height) / 2f)
+        val rect = RectF(0.75f, 0.75f, width - 0.75f, height - 0.75f)
+        canvas.drawRoundRect(rect, r, r, opaquePaint)
+        canvas.drawRoundRect(rect, r, r, opaqueBorderPaint)
     }
 
     /**
@@ -803,12 +1279,26 @@ class LiquidGlassView @JvmOverloads constructor(
 
         // ✅ 检测背景是否真的变化了（支持滚动背景）
         // 注意：必须做内容抽样，Bitmap.hashCode() 是对象身份哈希，每帧新建对象永远不同
-        val backdropHash = computeBackdropSignature(backdrop)
-        if (backdropHash != lastBackdropHash) {
+        // 动态背景模式下跳过抽样判断：8×8 抽样存在漏检概率，动画背景直接视为每帧变化
+        val backdropChanged = if (enableDynamicBackground) {
+            true
+        } else {
+            val backdropHash = computeBackdropSignature(backdrop)
+            if (backdropHash != lastBackdropHash) {
+                lastBackdropHash = backdropHash
+                true
+            } else {
+                false
+            }
+        }
+        if (backdropChanged) {
             cachedBackdrop?.recycle()
             cachedBackdrop = backdrop
-            lastBackdropHash = backdropHash
             blurDirty = true
+            // 亮度自适应：CPU 路径直接复用背景位图采样，零额外捕获开销
+            if (enableAdaptiveTint && material.adaptiveTint) {
+                luminanceMeter?.submit(BackdropLuminanceMeter.measureBitmap(backdrop))
+            }
         } else {
             // 背景没变化，回收新捕获的
             backdrop.recycle()
@@ -1014,6 +1504,7 @@ class LiquidGlassView @JvmOverloads constructor(
                 isPressed = true
                 updateTouchOffset(event.x, event.y)
                 animateScale(true)
+                animatePress(true)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -1028,10 +1519,34 @@ class LiquidGlassView @JvmOverloads constructor(
                 touchOffsetX = 0f
                 touchOffsetY = 0f
                 animateScale(false)
+                animatePress(false)
                 return true
             }
         }
         return super.onTouchEvent(event)
+    }
+
+    /**
+     * 按压液态动画：驱动透镜管线的 press/touch uniform
+     * （按下时折射增强 + 手指下方局部凸起，松开时回弹）
+     */
+    private fun animatePress(pressed: Boolean) {
+        if (a11yReducedMotion) {
+            // 减弱动效：直接跳变，不做过渡
+            pressDepth = if (pressed) 1f else 0f
+            invalidate()
+            return
+        }
+        pressAnimator?.cancel()
+        pressAnimator = ValueAnimator.ofFloat(pressDepth, if (pressed) 1f else 0f).apply {
+            duration = if (pressed) 180 else 320
+            interpolator = DecelerateInterpolator()
+            addUpdateListener {
+                pressDepth = it.animatedValue as Float
+                invalidate()
+            }
+            start()
+        }
     }
 
     /**
@@ -1106,9 +1621,12 @@ class LiquidGlassView @JvmOverloads constructor(
         // post 尚未执行成功等情况）；缺失时补一次异步生成
         post {
             if (displacementMaps == null && width > 0 && height > 0) {
-                generateDisplacementMaps()
+                maybeGenerateDisplacementMaps()
             }
         }
+
+        // 查询无障碍/省电状态（内部会按需注册传感器光源、启动亮度采样）
+        refreshAccessibilityState()
 
         // 重新挂载后所有缓存已被清空，标记脏并重启重绘
         lastBackdropHash = 0
@@ -1123,7 +1641,18 @@ class LiquidGlassView @JvmOverloads constructor(
 
         // ✅ 清理所有缓存和资源
         scaleAnimator?.cancel()
+        pressAnimator?.cancel()
         enhancedBlurEffect.release()  // 清理增强模糊效果
+
+        // 注销传感器光源与亮度采样
+        LightSourceController.unregister(this)
+        luminanceMeter?.stop()
+
+        // 清理透镜渲染器
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            lensRenderer?.release()
+        }
+        lensRenderer = null
 
         // 清理 GPU 渲染器
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

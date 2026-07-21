@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    LiquidGlassView 自定义 XML 属性
+
+    示例：
+    <com.example.liquidglass.LiquidGlassView
+        app:blurAmount="0.0625"
+        app:saturation="140"
+        app:cornerRadius="999dp"
+        app:glassMaterial="regular"
+        app:bevelWidth="22dp"
+        app:refractionHeight="26dp"
+        app:dispersionStrength="0.35" />
+-->
+<resources>
+    <declare-styleable name="LiquidGlassView">
+        <!-- 经典参数 -->
+        <attr name="displacementScale" format="float" />
+        <attr name="blurAmount" format="float" />
+        <attr name="saturation" format="float" />
+        <attr name="aberrationIntensity" format="float" />
+        <attr name="elasticity" format="float" />
+        <attr name="cornerRadius" format="dimension" />
+
+        <!-- Liquid Glass 2.0（API 33+ 透镜管线） -->
+        <attr name="glassMaterial" format="enum">
+            <enum name="regular" value="0" />
+            <enum name="clear" value="1" />
+        </attr>
+        <attr name="bevelWidth" format="dimension" />
+        <attr name="refractionHeight" format="dimension" />
+        <attr name="dispersionStrength" format="float" />
+        <attr name="sensorHighlight" format="boolean" />
+        <attr name="adaptiveTint" format="boolean" />
+    </declare-styleable>
+</resources>
