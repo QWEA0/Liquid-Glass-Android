@@ -28,9 +28,22 @@ A high-performance glassmorphism UI component library for Android, featuring rea
 
 ### ✨ Features
 
+**Liquid Glass 2.0 (API 33+, single-pass AGSL lens pipeline)**
+
+- **🔍 Real SDF Refraction** - True lens optics: edge compression ring driven by a live rounded-rect SDF (follows corner radius & shape in real time)
+- **🌈 Physical Dispersion** - Per-channel refraction along the surface normal → spectral fringes at the edge
+- **💡 Sensor-Driven Specular** - Normal-based highlights lit by a gravity-sensor light source (highlight moves as you tilt the device)
+- **🌓 Adaptive Luminance Tint** - Continuously senses backdrop brightness, adapts glass tint and notifies your foreground content (light/dark)
+- **🧪 Regular / Clear Materials** - Apple-style material variants (readability-first vs. media-transparent with dimming layer)
+- **🫧 Liquid Merge** - Two glass shapes blend with smin like mercury (`setSecondaryShape`)
+- **👆 Liquid Press** - Press boosts refraction and bulges the glass under your finger
+- **🌫️ Progressive Blur** - `ScrollEdgeBlurView`: scroll-edge effect fading from sharp to blurred
+- **♿ Accessibility Fallback** - Opaque material under high-contrast setting; honors "remove animations" and battery saver
+
+**Classic pipeline (API 24+)**
+
 - **🎨 Real-time Backdrop Blur** - Dynamic background blur with adjustable radius and saturation
 - **🌈 Chromatic Aberration** - RGB channel separation effect for a premium glass look
-- **💧 Liquid Distortion** - Edge distortion effects that respond to touch interactions
 - **✨ Edge Highlights** - Dynamic light reflections based on touch position
 - **⚡ High Performance** - Optimized with native C++ (NEON SIMD) and smart caching
 - **🎯 Easy Integration** - Simple XML attributes and Kotlin API
@@ -90,13 +103,28 @@ glassView.displacementScale = 70f
 
 // Choose blur method
 glassView.blurMethod = BlurMethod.SMART // AUTO, BOX, IIR_GAUSS, DOWNSAMPLE
+
+// Liquid Glass 2.0 (API 33+, auto-fallback below)
+glassView.material = GlassMaterial.REGULAR      // or CLEAR
+glassView.bevelWidth = 40f                      // glass "thickness" band (px)
+glassView.refractionHeight = 200f               // edge refraction strength (px)
+glassView.dispersionStrength = 0.10f            // spectral fringe width
+glassView.enableSensorHighlight = true          // gravity-driven highlight (default off)
+glassView.enableAdaptiveTint = true             // luminance-adaptive tint (default off)
+glassView.glassAppearanceListener = { isOverLight ->
+    // flip your foreground content color here
+}
+
+// Liquid merge (two shapes blending like mercury)
+glassView.setPrimaryShape(dockRect, cornerRadiusPx = 36f)
+glassView.setSecondaryShape(bubbleRect, cornerRadiusPx = 44f, smoothing = 40f)
 ```
 
 ### 🎛️ Customization Options
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `displacementScale` | Float | 70 | Edge distortion intensity |
+| `displacementScale` | Float | 70 | Edge distortion intensity (classic pipeline) |
 | `blurAmount` | Float | 0.0625 | Blur radius (0-1) |
 | `saturation` | Float | 140 | Color saturation percentage |
 | `aberrationIntensity` | Float | 2 | Chromatic aberration strength |
@@ -106,15 +134,28 @@ glassView.blurMethod = BlurMethod.SMART // AUTO, BOX, IIR_GAUSS, DOWNSAMPLE
 | `enableChromaticAberration` | Boolean | true | Enable RGB separation |
 | `enableEdgeHighlight` | Boolean | true | Enable edge lighting |
 | `blurMethod` | Enum | SMART | Blur algorithm selection |
+| `material` | Enum | REGULAR | Glass material: REGULAR / CLEAR (API 33+) |
+| `bevelWidth` | Float | 40 | Edge bevel band width in px, 2-200 (API 33+) |
+| `refractionHeight` | Float | 200 | Max edge refraction in px, 0-300 (API 33+) |
+| `dispersionStrength` | Float | 0.10 | Dispersion fringe strength 0-1 (API 33+) |
+| `enableSensorHighlight` | Boolean | false | Highlight follows device tilt (API 33+) |
+| `enableAdaptiveTint` | Boolean | false | Luminance-adaptive tint (API 33+) |
+| `accessibilityMode` | Enum | AUTO | AUTO / FORCE_FULL / FORCE_OPAQUE |
+
+See [docs/LIQUID_GLASS_V2.md](docs/LIQUID_GLASS_V2.md) for the full lens-pipeline documentation.
 
 ### 🏗️ Architecture
 
 **Core Components:**
 - `LiquidGlassView` - Main view component with touch interaction
+- `GlassLensRenderer` - Single-pass AGSL lens pipeline: SDF refraction, dispersion, normal-lit specular, inner shadow, smin merge (API 33+)
+- `LightSourceController` - Gravity-sensor world-fixed light source for specular highlights
+- `BackdropLuminanceMeter` - Backdrop brightness sampling for adaptive tint
+- `ScrollEdgeBlurView` - Progressive blur overlay (scroll edge effect)
+- `GlassAccessibility` - Reduce-transparency / reduce-motion / battery-saver detection
 - `EnhancedBlurEffect` - Multi-algorithm blur engine (Box, IIR Gaussian, Downsample)
 - `ChromaticAberrationEffect` - RGB channel separation processor
-- `EdgeDistortionEffect` - Liquid-like edge deformation
-- `EdgeHighlightEffect` - Dynamic light reflection renderer
+- `EdgeHighlightEffect` - Dynamic light reflection renderer (classic pipeline)
 - `AsyncRenderer` - Background thread rendering for smooth performance
 
 **Native Optimization:**
@@ -178,13 +219,28 @@ Inspired by the glassmorphism design trend and liquid-glass-react library.
 </p>
 ### ✨ 特性
 
+**Liquid Glass 2.0（API 33+，单 pass AGSL 透镜管线）**
+
+- **🔍 真实 SDF 折射** - 实时圆角矩形 SDF 驱动的透镜光学：边缘背景压缩环，实时跟随圆角与形状
+- **🌈 物理色散** - 三通道沿法线方向不同折射量 → 边缘光谱边纹
+- **💡 传感器高光** - 法线光照 + 重力传感器光源，倾斜设备时高光随之移动
+- **🌓 亮度自适应** - 持续感知背景明暗，自动调整染色并回调前景内容切换深浅色
+- **🧪 Regular / Clear 双材质** - Apple 风格材质变体（重可读性 / 高透+压暗层）
+- **🫧 液态融合** - 双玻璃形状 smin 平滑黏连合并（`setSecondaryShape`）
+- **👆 按压液态** - 按压增强折射并在手指下方局部凸起
+- **🌫️ 渐进模糊** - `ScrollEdgeBlurView`：滚动边缘从清晰渐变到模糊
+- **♿ 无障碍降级** - 高对比度设置下退化为不透明材质；尊重「移除动画」与省电模式
+
+**经典管线（API 24+）**
+
 - **🎨 实时背景模糊** - 动态背景模糊，可调节模糊半径和饱和度
 - **🌈 色差效果** - RGB 通道分离效果，呈现高级玻璃质感
-- **💧 液态扭曲** - 响应触摸交互的边缘扭曲效果
 - **✨ 边缘高光** - 基于触摸位置的动态光线反射
 - **⚡ 高性能** - 使用原生 C++ (NEON SIMD) 和智能缓存优化
 - **🎯 易于集成** - 简单的 XML 属性和 Kotlin API
 - **🔧 高度可定制** - 精细调节玻璃效果的每个方面
+
+完整透镜管线文档见 [docs/LIQUID_GLASS_V2.md](docs/LIQUID_GLASS_V2.md)。
 
 ### 📱 演示
 
@@ -261,10 +317,14 @@ glassView.blurMethod = BlurMethod.SMART // AUTO, BOX, IIR_GAUSS, DOWNSAMPLE
 
 **核心组件：**
 - `LiquidGlassView` - 主视图组件，支持触摸交互
+- `GlassLensRenderer` - 单 pass AGSL 透镜管线：SDF 折射、色散、法线高光、内阴影、smin 融合（API 33+）
+- `LightSourceController` - 重力传感器世界光源（镜面高光方向）
+- `BackdropLuminanceMeter` - 背景亮度采样（自适应染色数据源）
+- `ScrollEdgeBlurView` - 渐进模糊覆盖层（Scroll Edge Effect）
+- `GlassAccessibility` - 降低透明度/减弱动效/省电模式检测
 - `EnhancedBlurEffect` - 多算法模糊引擎（Box、IIR 高斯、降采样）
 - `ChromaticAberrationEffect` - RGB 通道分离处理器
-- `EdgeDistortionEffect` - 液态边缘变形效果
-- `EdgeHighlightEffect` - 动态光线反射渲染器
+- `EdgeHighlightEffect` - 动态光线反射渲染器（经典管线）
 - `AsyncRenderer` - 后台线程渲染，保证流畅性能
 
 **原生优化：**

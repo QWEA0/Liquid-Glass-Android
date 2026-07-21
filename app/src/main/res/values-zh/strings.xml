@@ -164,5 +164,22 @@
     <string name="disp_mode_prominent">突出</string>
     <string name="dispersion_cpu_only_note">色散仅在 CPU 管线实现，启用后会自动回退到 CPU 渲染。</string>
     <string name="channel_offset_advanced">高级 · 通道偏移</string>
+
+    <!-- Liquid Glass 2.0（透镜管线） -->
+    <string name="scene_merge">融合</string>
+    <string name="render_lens">透镜 2.0</string>
+    <string name="render_classic_gpu">经典 GPU</string>
+    <string name="section_lens">Liquid Glass 2.0 · 透镜（API 33+）</string>
+    <string name="lens_note">单 pass AGSL 透镜：真实 SDF 折射、边缘色散、法线驱动镜面高光（重力传感器光源）、内阴影、亮度自适应染色与液态融合。API 33 以下自动回退。</string>
+    <string name="lens_material">材质</string>
+    <string name="material_regular">常规</string>
+    <string name="material_clear">高透</string>
+    <string name="switch_sensor_highlight">传感器高光</string>
+    <string name="switch_adaptive_tint">背景亮度自适应</string>
+    <string name="lens_bevel">斜面宽度: %.0f px</string>
+    <string name="lens_refraction">折射强度: %.0f px</string>
+    <string name="lens_dispersion">色散强度: %.2f</string>
+    <string name="switch_a11y_opaque">无障碍不透明降级</string>
+    <string name="merge_hint">拖动圆形玻璃靠近胶囊——边缘会像液体一样黏连融合</string>
 </resources>
 

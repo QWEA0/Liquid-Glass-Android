@@ -58,6 +58,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         SCROLL(R.string.scene_scroll),
         IMAGE(R.string.scene_image),
         ANIMATED(R.string.scene_animated),
+        MERGE(R.string.scene_merge),
         SHOWCASE(R.string.scene_showcase)
     }
 
@@ -76,8 +77,12 @@ class ProfessionalDemoActivity : AppCompatActivity() {
 
     // 动态显隐的面板分组
     private lateinit var cpuOptionsGroup: LinearLayout
+    private lateinit var lensGroup: LinearLayout
     private lateinit var aberrationGroup: LinearLayout
     private lateinit var dispersionGroup: LinearLayout
+
+    // 性能监控数据源（融合场景使用场景内的玻璃视图）
+    private var statsSource: LiquidGlassView? = null
 
     private var customBackgroundBitmap: Bitmap? = null
     private var scenicBitmap: Bitmap? = null
@@ -134,17 +139,28 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     private fun dpF(v: Int): Float = v * resources.displayMetrics.density
 
     private fun createGlassView() {
+        val label = TextView(this).apply {
+            text = getString(R.string.glass_button_text)
+            textSize = 20f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(dp(36), dp(28), dp(36), dp(28))
+            setShadowLayer(8f, 0f, 2f, Color.BLACK)
+        }
         glassView = LiquidGlassView(this).apply {
             id = View.generateViewId()
             enableDynamicBackground = true
-            addView(TextView(this@ProfessionalDemoActivity).apply {
-                text = getString(R.string.glass_button_text)
-                textSize = 20f
-                setTextColor(Color.WHITE)
-                gravity = Gravity.CENTER
-                setPadding(dp(36), dp(28), dp(36), dp(28))
-                setShadowLayer(8f, 0f, 2f, Color.BLACK)
-            })
+            addView(label)
+            // 自适应外观：背景变亮时前景文字切换为深色（Apple Regular 玻璃行为）
+            glassAppearanceListener = { isOverLight ->
+                if (isOverLight) {
+                    label.setTextColor(0xDE000000.toInt())
+                    label.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+                } else {
+                    label.setTextColor(Color.WHITE)
+                    label.setShadowLayer(8f, 0f, 2f, Color.BLACK)
+                }
+            }
         }
     }
 
@@ -261,11 +277,13 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         extraGlassViews.clear()
         (glassView.parent as? ViewGroup)?.removeView(glassView)
         sceneHost.removeAllViews()
+        statsSource = glassView
 
         val root = when (scene) {
             Scene.SCROLL -> buildScrollScene()
             Scene.IMAGE -> buildImageScene()
             Scene.ANIMATED -> buildAnimatedScene()
+            Scene.MERGE -> buildMergeScene()
             Scene.SHOWCASE -> buildShowcaseScene()
         }
         sceneHost.addView(root)
@@ -278,12 +296,96 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).apply { gravity = Gravity.CENTER }
 
-    /** 场景 1：彩色渐变滚动背景 + 玻璃按钮 */
+    /** 场景 1：彩色渐变滚动背景 + 顶部渐进模糊 + 玻璃按钮 */
     private fun buildScrollScene(): View {
         val root = FrameLayout(this)
-        root.addView(createColorScroll())
+        val scroll = createColorScroll()
+        root.addView(scroll)
+
+        // 顶部渐进模糊（Scroll Edge Effect：内容滚入顶部时从清晰渐变到模糊）
+        val edgeBlur = ScrollEdgeBlurView(this).apply {
+            edge = ScrollEdgeBlurView.Edge.TOP
+            maxBlurRadius = dpF(14)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, dp(110)
+            ).apply { gravity = Gravity.TOP }
+        }
+        edgeBlur.bindScrollView(scroll)
+        root.addView(edgeBlur)
+
         glassView.layoutParams = centerGlassParams()
         root.addView(glassView)
+        return root
+    }
+
+    /** 场景 4：液态融合（拖动圆形玻璃靠近胶囊 dock，边缘 smin 黏连合并；API 33+） */
+    private fun buildMergeScene(): View {
+        val root = FrameLayout(this)
+        root.addView(createColorScroll())
+
+        val panelW = dp(320)
+        val panelH = dp(340)
+        val mergeGlass = newExtraGlass(999f).apply {
+            layoutParams = FrameLayout.LayoutParams(panelW, panelH).apply {
+                gravity = Gravity.CENTER
+            }
+            enableDynamicBackground = true
+        }
+        statsSource = mergeGlass
+
+        // 主形状 = 底部胶囊 dock；副形状 = 可拖动的圆形玻璃
+        val w = panelW.toFloat()
+        val h = panelH.toFloat()
+        val dockH = dpF(72)
+        val dockHalfW = dpF(120)
+        mergeGlass.setPrimaryShape(
+            android.graphics.RectF(w / 2f - dockHalfW, h - dockH - dpF(16), w / 2f + dockHalfW, h - dpF(16)),
+            dockH / 2f
+        )
+
+        val bubbleR = dpF(44)
+        var bx = w / 2f
+        var by = h * 0.30f
+        fun applyBubble() {
+            mergeGlass.setSecondaryShape(
+                android.graphics.RectF(bx - bubbleR, by - bubbleR, bx + bubbleR, by + bubbleR),
+                bubbleR,
+                dpF(40)
+            )
+        }
+        applyBubble()
+
+        // 拖动气泡（listener 优先于内部 onTouchEvent，融合场景不需要弹性缩放）
+        mergeGlass.setOnTouchListener { v, e ->
+            when (e.action) {
+                android.view.MotionEvent.ACTION_DOWN,
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    bx = e.x.coerceIn(bubbleR, w - bubbleR)
+                    by = e.y.coerceIn(bubbleR, h - bubbleR)
+                    applyBubble()
+                }
+                android.view.MotionEvent.ACTION_UP -> v.performClick()
+            }
+            true
+        }
+        root.addView(mergeGlass)
+
+        // 提示文字
+        root.addView(TextView(this).apply {
+            text = getString(R.string.merge_hint)
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setShadowLayer(6f, 0f, 1f, Color.BLACK)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                topMargin = dp(56)
+            }
+            setPadding(dp(24), 0, dp(24), 0)
+        })
         return root
     }
 
@@ -591,6 +693,14 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     private fun syncGlassParams(target: LiquidGlassView) {
         val src = glassView
         target.useHardwareBlurWhenPossible = src.useHardwareBlurWhenPossible
+        target.useShaderPipeline = src.useShaderPipeline
+        target.material = src.material
+        target.bevelWidth = src.bevelWidth
+        target.refractionHeight = src.refractionHeight
+        target.dispersionStrength = src.dispersionStrength
+        target.enableSensorHighlight = src.enableSensorHighlight
+        target.enableAdaptiveTint = src.enableAdaptiveTint
+        target.accessibilityMode = src.accessibilityMode
         target.enableBackdropBlur = src.enableBackdropBlur
         target.blurAmount = src.blurAmount
         target.saturation = src.saturation
@@ -671,20 +781,41 @@ class ProfessionalDemoActivity : AppCompatActivity() {
 
         // ---------- 渲染路径 ----------
         val pathCard = addCard(root, getString(R.string.section_render_path))
+        val initialPath = when {
+            !glassView.useHardwareBlurWhenPossible -> 2
+            !glassView.useShaderPipeline -> 1
+            else -> 0
+        }
         addSegmented(
             pathCard,
-            listOf(getString(R.string.render_gpu_first), getString(R.string.render_force_cpu)),
-            if (glassView.useHardwareBlurWhenPossible) 0 else 1
+            listOf(
+                getString(R.string.render_lens),
+                getString(R.string.render_classic_gpu),
+                getString(R.string.render_force_cpu)
+            ),
+            initialPath
         ) { index ->
-            applyGlass { it.useHardwareBlurWhenPossible = (index == 0) }
-            cpuOptionsGroup.visibility = if (index == 1) View.VISIBLE else View.GONE
+            applyGlass {
+                it.useHardwareBlurWhenPossible = index != 2
+                it.useShaderPipeline = index == 0
+            }
+            lensGroup.visibility = if (index == 0) View.VISIBLE else View.GONE
+            cpuOptionsGroup.visibility = if (index == 2) View.VISIBLE else View.GONE
         }
         addNote(pathCard, getString(R.string.gpu_render_desc))
+
+        // Liquid Glass 2.0 透镜选项（仅透镜路径时显示）
+        lensGroup = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = if (initialPath == 0) View.VISIBLE else View.GONE
+        }
+        pathCard.addView(lensGroup)
+        buildLensOptions(lensGroup)
 
         // CPU 算法选项（仅强制 CPU 时显示）
         cpuOptionsGroup = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            visibility = if (glassView.useHardwareBlurWhenPossible) View.GONE else View.VISIBLE
+            visibility = if (initialPath == 2) View.VISIBLE else View.GONE
         }
         pathCard.addView(cpuOptionsGroup)
         buildCpuOptions(cpuOptionsGroup)
@@ -782,6 +913,56 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             val prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
             val currentLang = prefs.getString(KEY_LANGUAGE, LANG_CHINESE) ?: LANG_CHINESE
             switchLanguage(if (currentLang == LANG_CHINESE) LANG_ENGLISH else LANG_CHINESE)
+        }
+    }
+
+    /** Liquid Glass 2.0 透镜管线选项 */
+    private fun buildLensOptions(group: LinearLayout) {
+        addNote(group, getString(R.string.lens_note))
+
+        // 材质：Regular / Clear
+        addLabel(group, getString(R.string.lens_material))
+        addSegmented(
+            group,
+            listOf(getString(R.string.material_regular), getString(R.string.material_clear)),
+            if (glassView.material == GlassMaterial.CLEAR) 1 else 0
+        ) { index ->
+            applyGlass { it.material = if (index == 1) GlassMaterial.CLEAR else GlassMaterial.REGULAR }
+        }
+
+        addSwitchRow(group, getString(R.string.switch_sensor_highlight), glassView.enableSensorHighlight) { checked ->
+            applyGlass { it.enableSensorHighlight = checked }
+        }
+        addSwitchRow(group, getString(R.string.switch_adaptive_tint), glassView.enableAdaptiveTint) { checked ->
+            applyGlass { it.enableAdaptiveTint = checked }
+        }
+
+        // 斜面宽度 2-120 px
+        addSlider(group, 118, (glassView.bevelWidth - 2f).toInt(),
+            { getString(R.string.lens_bevel, it + 2f) }) { p ->
+            applyGlass { it.bevelWidth = p + 2f }
+        }
+        // 折射强度 0-200 px（属性上限 300，采样有安全钳制不会越界）
+        addSlider(group, 200, glassView.refractionHeight.toInt(),
+            { getString(R.string.lens_refraction, it.toFloat()) }) { p ->
+            applyGlass { it.refractionHeight = p.toFloat() }
+        }
+        // 色散强度 0-1
+        addSlider(group, 100, (glassView.dispersionStrength * 100f).toInt(),
+            { getString(R.string.lens_dispersion, it / 100f) }) { p ->
+            applyGlass { it.dispersionStrength = p / 100f }
+        }
+
+        // 无障碍不透明降级（演示 Reduce Transparency 行为）
+        addSwitchRow(
+            group,
+            getString(R.string.switch_a11y_opaque),
+            glassView.accessibilityMode == GlassAccessibilityMode.FORCE_OPAQUE
+        ) { checked ->
+            applyGlass {
+                it.accessibilityMode =
+                    if (checked) GlassAccessibilityMode.FORCE_OPAQUE else GlassAccessibilityMode.AUTO
+            }
         }
     }
 
@@ -1154,7 +1335,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     }
 
     private fun updatePerformanceDisplay() {
-        val stats = glassView.lastFrameStats ?: return
+        val stats = (statsSource ?: glassView).lastFrameStats ?: return
         val isGpu = stats.effectName.startsWith("GPU")
 
         val fps = when {

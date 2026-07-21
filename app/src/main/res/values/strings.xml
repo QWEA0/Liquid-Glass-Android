@@ -164,4 +164,21 @@
     <string name="disp_mode_prominent">Prominent</string>
     <string name="dispersion_cpu_only_note">Dispersion is implemented on the CPU pipeline only — enabling it automatically falls back to CPU rendering.</string>
     <string name="channel_offset_advanced">Advanced · Channel Offsets</string>
+
+    <!-- Liquid Glass 2.0 (Lens Pipeline) -->
+    <string name="scene_merge">Merge</string>
+    <string name="render_lens">Lens 2.0</string>
+    <string name="render_classic_gpu">Classic GPU</string>
+    <string name="section_lens">Liquid Glass 2.0 · Lens (API 33+)</string>
+    <string name="lens_note">Single-pass AGSL lens: real SDF refraction, edge dispersion, normal-driven specular (gravity-sensor light), inner shadow, adaptive tint and liquid merge. Falls back automatically below API 33.</string>
+    <string name="lens_material">Material</string>
+    <string name="material_regular">Regular</string>
+    <string name="material_clear">Clear</string>
+    <string name="switch_sensor_highlight">Sensor-Driven Highlight</string>
+    <string name="switch_adaptive_tint">Adaptive Luminance Tint</string>
+    <string name="lens_bevel">Bevel Width: %.0f px</string>
+    <string name="lens_refraction">Refraction: %.0f px</string>
+    <string name="lens_dispersion">Dispersion: %.2f</string>
+    <string name="switch_a11y_opaque">Accessibility Opaque Fallback</string>
+    <string name="merge_hint">Drag the bubble near the capsule — edges merge like liquid</string>
 </resources>
