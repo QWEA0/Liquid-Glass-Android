@@ -17,6 +17,11 @@
     <string name="switch_performance_overlay">Show Performance Overlay</string>
     <string name="debug_info_waiting">Waiting for performance data…</string>
 
+    <!-- Render Path Section -->
+    <string name="section_render_path">Render Path</string>
+    <string name="switch_gpu_render">GPU Accelerated Rendering (API 31+)</string>
+    <string name="gpu_render_desc">When ON, blur/saturation (and chromatic aberration on API 33+) run entirely on the GPU via RenderEffect, and the CPU algorithm options below have no effect. Turn OFF to test CPU algorithms (blur method, C++/Kotlin aberration, downsampling, etc.).</string>
+
     <!-- Blur Method Section -->
     <string name="section_blur_method">Blur Algorithm</string>
     <string name="current_blur_method">Current: Smart Selection</string>

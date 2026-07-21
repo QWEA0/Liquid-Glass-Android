@@ -17,6 +17,11 @@
     <string name="switch_performance_overlay">显示性能悬浮窗</string>
     <string name="debug_info_waiting">等待性能数据…</string>
     
+    <!-- Render Path Section -->
+    <string name="section_render_path">渲染路径</string>
+    <string name="switch_gpu_render">GPU 加速渲染 (API 31+)</string>
+    <string name="gpu_render_desc">开启时模糊/饱和度（API 33+ 还包括色差）完全由 GPU 的 RenderEffect 执行，下方的 CPU 算法选项不生效。关闭后可测试 CPU 算法（模糊算法、C++/Kotlin 色差、下采样等）。</string>
+
     <!-- Blur Method Section -->
     <string name="section_blur_method">模糊算法</string>
     <string name="current_blur_method">当前：智能选择</string>

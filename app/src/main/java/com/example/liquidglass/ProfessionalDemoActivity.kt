@@ -410,7 +410,31 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             text = getString(R.string.debug_info_waiting)
         }
         container.addView(tvDebugInfo)
-        
+
+        // ✅ 渲染路径切换（GPU / CPU）
+        container.addView(createSectionTitle(getString(R.string.section_render_path)))
+
+        val switchGpuRender = Switch(this).apply {
+            id = View.generateViewId()
+            text = getString(R.string.switch_gpu_render)
+            setTextColor(Color.BLACK)
+            isChecked = glassView.useHardwareBlurWhenPossible
+            setOnCheckedChangeListener { _, isChecked ->
+                glassView.useHardwareBlurWhenPossible = isChecked
+            }
+        }
+        container.addView(switchGpuRender)
+
+        val gpuRenderDesc = TextView(this).apply {
+            text = getString(R.string.gpu_render_desc)
+            textSize = 10f
+            setTextColor(0xFF666666.toInt())
+            setPadding(0, 8, 0, 0)
+        }
+        container.addView(gpuRenderDesc)
+
+        container.addView(createDivider())
+
         // 模糊方法选择
         container.addView(createSectionTitle(getString(R.string.section_blur_method)))
 
