@@ -1079,6 +1079,27 @@ class LiquidGlassView @JvmOverloads constructor(
         }
     }
     
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+
+        // ✅ 重新挂载（如切换演示场景时被移到新父容器）后恢复状态：
+        // onDetachedFromWindow 已回收位移贴图，而尺寸未变时不会触发
+        // onSizeChanged，需要在这里补一次生成，否则色差效果（GPU 路径
+        // 直接回退 CPU，CPU 路径跳过色差）将一直缺失
+        post {
+            if (displacementMaps == null && width > 0 && height > 0) {
+                generateDisplacementMaps()
+            }
+        }
+
+        // 重新挂载后所有缓存已被清空，标记脏并重启重绘
+        lastBackdropHash = 0
+        blurDirty = true
+        aberrationDirty = true
+        dispersionDirty = true
+        invalidate()
+    }
+
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
 
