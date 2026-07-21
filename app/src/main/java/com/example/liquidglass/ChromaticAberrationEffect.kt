@@ -286,9 +286,6 @@ class ChromaticAberrationEffect {
         val actualGreenOffset = greenOffset * intensity * downscale
         val actualBlueOffset = blueOffset * intensity * downscale
 
-        Log.d(TAG, "Kotlin: processSize=${processWidth}x${processHeight}, scaleFactor=$scaleFactor, " +
-                "offsets=($actualRedOffset, $actualGreenOffset, $actualBlueOffset)")
-
         // ✅ 直接在一次遍历中处理所有通道（最近邻采样）
         for (y in 0 until processHeight) {
             for (x in 0 until processWidth) {
@@ -298,17 +295,6 @@ class ChromaticAberrationEffect {
                 // 计算基础位移
                 val baseDx = (Color.red(mapColor) - 128) * scaleFactor
                 val baseDy = (Color.green(mapColor) - 128) * scaleFactor
-
-                // 调试：打印中心像素的信息
-                if (x == processWidth / 2 && y == processHeight / 2) {
-                    Log.d(TAG, "Kotlin center pixel: ARGB=(${Color.alpha(mapColor)},${Color.red(mapColor)},${Color.green(mapColor)},${Color.blue(mapColor)}), baseDx=$baseDx, baseDy=$baseDy, offsets=($actualRedOffset, $actualGreenOffset, $actualBlueOffset)")
-                }
-
-                // 打印几个边缘像素的位移贴图值
-                if ((x == 10 && y == 10) || (x == processWidth - 10 && y == 10) ||
-                    (x == 10 && y == processHeight - 10) || (x == processWidth - 10 && y == processHeight - 10)) {
-                    Log.d(TAG, "Kotlin edge pixel ($x,$y): ARGB=(${Color.alpha(mapColor)},${Color.red(mapColor)},${Color.green(mapColor)},${Color.blue(mapColor)}), baseDx=$baseDx, baseDy=$baseDy")
-                }
 
                 // 采样三个通道（每个通道有不同的位移）
                 val rSrcX = x + baseDx + actualRedOffset
