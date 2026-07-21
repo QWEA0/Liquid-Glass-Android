@@ -1437,127 +1437,107 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     }
 
     private fun updatePerformanceDisplay() {
-        // 从 LiquidGlassView 的日志中提取性能数据（在后台线程执行）
-        Thread {
-            var process: Process? = null
-            var reader: java.io.BufferedReader? = null
-            try {
-                process = Runtime.getRuntime().exec("logcat -d -s LiquidGlassView:D NativeGauss:D -t 20")
-                reader = java.io.BufferedReader(java.io.InputStreamReader(process.inputStream))
-                var line: String?
-                var captureTime = ""
-                var blurTime = ""
-                var aberrationTime = ""
-                var totalTime = ""
-                var capturedSize = ""
-                var blurredSize = ""
+        // ✅ 直接读取 LiquidGlassView 的结构化帧统计（不再执行 logcat 子进程解析日志）
+        val stats = glassView.lastFrameStats ?: return
 
-                while (reader.readLine().also { line = it } != null) {
-                    line?.let {
-                        if (it.contains("捕获背景:")) {
-                            captureTime = it.substringAfter("捕获背景: ").substringBefore("ms").trim()
-                        }
-                        if (it.contains("模糊处理:")) {
-                            blurTime = it.substringAfter("模糊处理: ").substringBefore("ms").trim()
-                        }
-                        if (it.contains("色差效果:")) {
-                            aberrationTime = it.substringAfter("色差效果: ").substringBefore("ms").trim()
-                        }
-                        if (it.contains("总耗时:")) {
-                            totalTime = it.substringAfter("总耗时: ").substringBefore("ms").trim()
-                        }
-                        // 提取图片尺寸信息
-                        if (it.contains("gaussianIIRNeonInplace:") || it.contains("box3Inplace:")) {
-                            // 格式: "gaussianIIRNeonInplace: 550x304, sigma=1.98"
-                            val sizeMatch = Regex("(\\d+)x(\\d+)").find(it)
-                            if (sizeMatch != null) {
-                                blurredSize = "${sizeMatch.groupValues[1]}×${sizeMatch.groupValues[2]}"
-                            }
-                        }
-                    }
-                }
+        val capturedSize = "${glassView.width}×${glassView.height}"
 
-                // 获取 LiquidGlassView 的尺寸作为捕获尺寸
-                capturedSize = "${glassView.width}×${glassView.height}"
+        // 获取当前算法信息
+        val blurMethodName = when (glassView.blurMethod) {
+            BlurMethod.SMART -> "智能"
+            BlurMethod.BOX_BLUR -> "Box(KT)"
+            BlurMethod.BOX_BLUR_CPP -> "Box(C++)"
+            BlurMethod.IIR_GAUSSIAN -> "IIR"
+            BlurMethod.IIR_GAUSSIAN_NEON -> "NEON"
+            BlurMethod.BOX3 -> "Box3"
+            BlurMethod.DOWNSAMPLE -> "下采样"
+        }
 
-                if (totalTime.isNotEmpty()) {
-                    val fps = (1000.0 / totalTime.toDouble()).toInt()
+        val aberrationMethodName = when (glassView.chromaticAberrationMode) {
+            ChromaticAberrationEffect.PerformanceMode.AUTO -> "自动"
+            ChromaticAberrationEffect.PerformanceMode.CPP -> "C++"
+            ChromaticAberrationEffect.PerformanceMode.KOTLIN -> "KT"
+        }
 
-                    // 获取当前算法信息
-                    val blurMethodName = when (glassView.blurMethod) {
-                        BlurMethod.SMART -> "智能"
-                        BlurMethod.BOX_BLUR -> "Box(KT)"
-                        BlurMethod.BOX_BLUR_CPP -> "Box(C++)"
-                        BlurMethod.IIR_GAUSSIAN -> "IIR"
-                        BlurMethod.IIR_GAUSSIAN_NEON -> "NEON"
-                        BlurMethod.BOX3 -> "Box3"
-                        BlurMethod.DOWNSAMPLE -> "下采样"
-                    }
+        val isGpu = stats.effectName.startsWith("GPU")
+        // 优先显示实测帧率；无重绘循环时退化为按管线耗时推算
+        val fps = when {
+            stats.drawFps > 0 -> stats.drawFps
+            stats.totalMs > 0f -> (1000f / stats.totalMs).toInt()
+            else -> 0
+        }
 
-                    val aberrationMethodName = when (glassView.chromaticAberrationMode) {
-                        ChromaticAberrationEffect.PerformanceMode.AUTO -> "自动"
-                        ChromaticAberrationEffect.PerformanceMode.CPP -> "C++"
-                        ChromaticAberrationEffect.PerformanceMode.KOTLIN -> "KT"
-                    }
+        fun fmt(ms: Float) = String.format("%.2f", ms)
+        val blurStatus = if (stats.blurRecomputed) "" else " (缓存)"
+        val effectStatus = if (stats.effectRecomputed) "" else " (缓存)"
 
-                    val overlayText = """
-                        FPS: ~$fps
-                        捕获: ${captureTime}ms
-                        模糊: ${blurTime}ms ($blurMethodName)
-                        色差: ${aberrationTime}ms ($aberrationMethodName)
-                        总计: ${totalTime}ms
-                    """.trimIndent()
+        val overlayText = if (isGpu) {
+            """
+                FPS: $fps
+                渲染: ${stats.effectName} (RenderEffect)
+                录制: ${fmt(stats.totalMs)}ms
+            """.trimIndent()
+        } else {
+            """
+                FPS: $fps
+                捕获: ${fmt(stats.captureMs)}ms
+                模糊: ${fmt(stats.blurMs)}ms ($blurMethodName)$blurStatus
+                ${stats.effectName}: ${fmt(stats.effectMs)}ms ($aberrationMethodName)$effectStatus
+                总计: ${fmt(stats.totalMs)}ms
+            """.trimIndent()
+        }
 
-                    val debugText = """
-                        性能详情：
-                        - 捕获背景: ${captureTime}ms
-                        - 模糊处理: ${blurTime}ms (算法: $blurMethodName)
-                        - 色差效果: ${aberrationTime}ms (算法: $aberrationMethodName)
-                        - 总耗时: ${totalTime}ms
-                        - 帧率: ~${fps} FPS
+        val debugText = if (isGpu) {
+            """
+                性能详情：
+                - 渲染路径: ${stats.effectName} (RenderNode + RenderEffect)
+                - CPU 侧录制耗时: ${fmt(stats.totalMs)}ms
+                - 帧率: $fps FPS
 
-                        算法说明：
-                        - 模糊: $blurMethodName = ${getBlurMethodDescription()}
-                        - 色差: $aberrationMethodName = ${getAberrationMethodDescription()}
-                    """.trimIndent()
+                说明：模糊/饱和度（API 31+）与色差（API 33+）
+                完全由 GPU 执行，无 Bitmap 分配、无像素回读。
+                色散效果或低版本系统会回退到 CPU 管线。
+            """.trimIndent()
+        } else {
+            """
+                性能详情：
+                - 捕获背景: ${fmt(stats.captureMs)}ms
+                - 模糊处理: ${fmt(stats.blurMs)}ms (算法: $blurMethodName)$blurStatus
+                - ${stats.effectName}效果: ${fmt(stats.effectMs)}ms (算法: $aberrationMethodName)$effectStatus
+                - 总耗时: ${fmt(stats.totalMs)}ms
+                - 帧率: $fps FPS
 
-                    // 更新图片尺寸信息
-                    val sizeText = if (blurredSize.isNotEmpty()) {
-                        """
-                            截取图片尺寸: $capturedSize
-                            实际模糊尺寸: $blurredSize
+                算法说明：
+                - 模糊: $blurMethodName = ${getBlurMethodDescription()}
+                - 色差: $aberrationMethodName = ${getAberrationMethodDescription()}
+            """.trimIndent()
+        }
 
-                            说明：
-                            - 截取尺寸 = LiquidGlass 按钮大小
-                            - 模糊尺寸 = 实际处理的图片大小
-                            - 如果两者不同，说明使用了下采样优化
-                        """.trimIndent()
-                    } else {
-                        """
-                            截取图片尺寸: $capturedSize
-                            实际模糊尺寸: 等待数据...
-                        """.trimIndent()
-                    }
+        val sizeText = if (isGpu) {
+            """
+                截取图片尺寸: $capturedSize
+                实际模糊尺寸: GPU 直接处理（无截图）
+            """.trimIndent()
+        } else if (stats.processedWidth > 0) {
+            """
+                截取图片尺寸: $capturedSize
+                实际模糊尺寸: ${stats.processedWidth}×${stats.processedHeight}
 
-                    // 在主线程更新 UI
-                    runOnUiThread {
-                        tvPerformanceOverlay.text = overlayText
-                        tvDebugInfo.text = debugText
-                        tvImageSizes.text = sizeText
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("ProfessionalDemo", "Failed to read performance data", e)
-            } finally {
-                // 确保关闭资源
-                try {
-                    reader?.close()
-                    process?.destroy()
-                } catch (e: Exception) {
-                    Log.e("ProfessionalDemo", "Failed to close resources", e)
-                }
-            }
-        }.start()
+                说明：
+                - 截取尺寸 = LiquidGlass 按钮大小
+                - 模糊尺寸 = 实际处理的图片大小
+                - 如果两者不同，说明使用了下采样优化
+            """.trimIndent()
+        } else {
+            """
+                截取图片尺寸: $capturedSize
+                实际模糊尺寸: 等待数据...
+            """.trimIndent()
+        }
+
+        tvPerformanceOverlay.text = overlayText
+        tvDebugInfo.text = debugText
+        tvImageSizes.text = sizeText
     }
 
     override fun onDestroy() {
