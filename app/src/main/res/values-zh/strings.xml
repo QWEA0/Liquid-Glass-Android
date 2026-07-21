@@ -141,5 +141,28 @@
     <string name="section_optimized_capture">优化捕获</string>
     <string name="switch_enable_optimized_capture">启用优化捕获</string>
     <string name="optimized_capture_desc">• 启用：仅捕获圆角内区域，降低渲染量\n• 禁用：捕获完整矩形区域\n\n适用场景：圆角按钮、圆角卡片\n性能提升：约 5-8%</string>
+
+    <!-- 演示场景 -->
+    <string name="scene_scroll">滚动</string>
+    <string name="scene_image">图片</string>
+    <string name="scene_animated">动画</string>
+    <string name="scene_showcase">组件</string>
+
+    <!-- 现代面板 -->
+    <string name="section_glass_params">玻璃参数（GPU + CPU 通用）</string>
+    <string name="section_color_effect">色彩效果</string>
+    <string name="section_cpu_options">CPU 算法选项</string>
+    <string name="render_gpu_first">GPU 优先</string>
+    <string name="render_force_cpu">强制 CPU</string>
+    <string name="effect_none">无</string>
+    <string name="impl_auto">自动</string>
+    <string name="corner_radius_value">圆角半径: %.0f px</string>
+    <string name="displacement_scale_value">位移强度: %.0f</string>
+    <string name="displacement_mode">位移模式</string>
+    <string name="disp_mode_standard">标准</string>
+    <string name="disp_mode_polar">极坐标</string>
+    <string name="disp_mode_prominent">突出</string>
+    <string name="dispersion_cpu_only_note">色散仅在 CPU 管线实现，启用后会自动回退到 CPU 渲染。</string>
+    <string name="channel_offset_advanced">高级 · 通道偏移</string>
 </resources>
 

@@ -141,4 +141,27 @@
     <string name="section_optimized_capture">Optimized Capture</string>
     <string name="switch_enable_optimized_capture">Enable Optimized Capture</string>
     <string name="optimized_capture_desc">• Enabled: Capture only rounded corner area, reduce rendering\n• Disabled: Capture full rectangular area\n\nUse cases: Rounded buttons, rounded cards\nPerformance gain: ~5-8%</string>
+
+    <!-- Demo Scenes -->
+    <string name="scene_scroll">Scroll</string>
+    <string name="scene_image">Image</string>
+    <string name="scene_animated">Animated</string>
+    <string name="scene_showcase">Showcase</string>
+
+    <!-- Modern Panel -->
+    <string name="section_glass_params">Glass Parameters (GPU + CPU)</string>
+    <string name="section_color_effect">Color Effect</string>
+    <string name="section_cpu_options">CPU Algorithm Options</string>
+    <string name="render_gpu_first">GPU First</string>
+    <string name="render_force_cpu">Force CPU</string>
+    <string name="effect_none">None</string>
+    <string name="impl_auto">Auto</string>
+    <string name="corner_radius_value">Corner Radius: %.0f px</string>
+    <string name="displacement_scale_value">Displacement Scale: %.0f</string>
+    <string name="displacement_mode">Displacement Mode</string>
+    <string name="disp_mode_standard">Standard</string>
+    <string name="disp_mode_polar">Polar</string>
+    <string name="disp_mode_prominent">Prominent</string>
+    <string name="dispersion_cpu_only_note">Dispersion is implemented on the CPU pipeline only — enabling it automatically falls back to CPU rendering.</string>
+    <string name="channel_offset_advanced">Advanced · Channel Offsets</string>
 </resources>

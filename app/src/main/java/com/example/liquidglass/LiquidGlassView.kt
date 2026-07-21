@@ -257,7 +257,19 @@ class LiquidGlassView @JvmOverloads constructor(
         }
 
     var elasticity = 0.15f             // 弹性系数
-    var cornerRadius = 999f            // 圆角半径
+
+    // 圆角半径（运行时可调，GPU/CPU 路径均生效）
+    var cornerRadius = 999f
+        set(value) {
+            if (field != value) {
+                field = value
+                updateClipPath()
+                blurDirty = true
+                aberrationDirty = true
+                dispersionDirty = true
+                invalidate()
+            }
+        }
 
     var overLight = false
         set(value) {
