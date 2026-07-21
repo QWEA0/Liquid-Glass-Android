@@ -45,6 +45,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
+import com.example.liquidglass.demo.R
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import java.util.Locale
 import kotlin.math.cos

@@ -19,9 +19,11 @@
         android:theme="@style/Theme.LiquidGlass"
         tools:targetApi="31">
 
-        <!-- LiquidGlass 专业演示 Activity (主入口) -->
+        <!-- LiquidGlass 专业演示 Activity (主入口)
+             注意：namespace 为 com.example.liquidglass.demo，
+             Activity 类仍在 com.example.liquidglass 包下，需写全名 -->
         <activity
-            android:name=".ProfessionalDemoActivity"
+            android:name="com.example.liquidglass.ProfessionalDemoActivity"
             android:exported="true"
             android:label="LiquidGlass Professional Demo"
             android:screenOrientation="portrait">

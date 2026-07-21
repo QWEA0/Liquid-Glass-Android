@@ -10,6 +10,7 @@
 # Build outputs
 /build
 /app/build
+/liquidglass/build
 /captures
 /docs
 

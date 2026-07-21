@@ -59,6 +59,30 @@ A high-performance glassmorphism UI component library for Android, featuring rea
 
 </div>
 
+### 📦 Installation (JitPack)
+
+Add JitPack to your `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+```
+
+Add the dependency:
+
+```kotlin
+dependencies {
+    implementation("com.github.QWEA0.Liquid-Glass-Android:liquidglass:v2.0.0")
+}
+```
+
+The library ships as the `:liquidglass` module (AAR with prebuilt native `.so` for arm64-v8a / armeabi-v7a); the `:app` module in this repo is the demo.
+
 ### 🚀 Quick Start
 
 #### 1. Add to Your Layout
@@ -258,6 +282,30 @@ Inspired by the glassmorphism design trend and liquid-glass-react library.
 <img src="assets\1762103926407.gif" alt="LiquidGlass Demo Screenshot" width="260">
 
 </div>
+
+### 📦 安装（JitPack）
+
+在 `settings.gradle.kts` 中添加 JitPack 仓库：
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+```
+
+添加依赖：
+
+```kotlin
+dependencies {
+    implementation("com.github.QWEA0.Liquid-Glass-Android:liquidglass:v2.0.0")
+}
+```
+
+库以 `:liquidglass` 模块发布（AAR，内含 arm64-v8a / armeabi-v7a 预编译 `.so`）；仓库中的 `:app` 为演示工程。
 
 ### 🚀 快速开始
 
