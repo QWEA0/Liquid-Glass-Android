@@ -67,12 +67,17 @@ A high-performance glassmorphism UI component library for Android, featuring rea
 <com.example.liquidglass.LiquidGlassView
     android:layout_width="200dp"
     android:layout_height="80dp"
-    app:displacementScale="70"
     app:blurAmount="0.0625"
     app:saturation="140"
     app:aberrationIntensity="2"
     app:elasticity="0.15"
-    app:cornerRadius="999">
+    app:cornerRadius="999dp"
+    app:glassMaterial="regular"
+    app:bevelWidth="14dp"
+    app:refractionHeight="66dp"
+    app:dispersionStrength="0.10"
+    app:sensorHighlight="true"
+    app:adaptiveTint="true">
 
     <!-- Your content here -->
     <TextView
@@ -165,14 +170,16 @@ See [docs/LIQUID_GLASS_V2.md](docs/LIQUID_GLASS_V2.md) for the full lens-pipelin
 
 ### 📊 Performance
 
+- **GPU Lens Pipeline (API 33+)**: single-pass AGSL via RenderEffect — zero bitmap allocation, zero readback; ~0.06 ms CPU record cost per frame, steady 60 fps measured on device
 - **Optimized Rendering**: Smart caching with 3-layer strategy (backdrop → blur → final)
-- **Native Acceleration**: ARM NEON SIMD for 4-8x performance boost
+- **Native Acceleration**: ARM NEON SIMD for 4-8x performance boost (classic pipeline)
 - **Adaptive Quality**: Automatic downsampling for smooth 60fps on mid-range devices
 - **Memory Efficient**: Bitmap pooling and automatic resource recycling
 
 ### 🔧 Requirements
 
-- **Min SDK**: 24 (Android 7.0)
+- **Min SDK**: 24 (Android 7.0) — classic pipeline
+- **Liquid Glass 2.0 lens pipeline**: API 33+ (Android 13), automatic fallback below
 - **Target SDK**: 35 (Android 15)
 - **Language**: Kotlin
 - **NDK**: Required for native blur acceleration
@@ -260,12 +267,17 @@ Inspired by the glassmorphism design trend and liquid-glass-react library.
 <com.example.liquidglass.LiquidGlassView
     android:layout_width="200dp"
     android:layout_height="80dp"
-    app:displacementScale="70"
     app:blurAmount="0.0625"
     app:saturation="140"
     app:aberrationIntensity="2"
     app:elasticity="0.15"
-    app:cornerRadius="999">
+    app:cornerRadius="999dp"
+    app:glassMaterial="regular"
+    app:bevelWidth="14dp"
+    app:refractionHeight="66dp"
+    app:dispersionStrength="0.10"
+    app:sensorHighlight="true"
+    app:adaptiveTint="true">
 
     <!-- 在这里放置你的内容 -->
     <TextView
@@ -296,13 +308,28 @@ glassView.displacementScale = 70f
 
 // 选择模糊方法
 glassView.blurMethod = BlurMethod.SMART // AUTO, BOX, IIR_GAUSS, DOWNSAMPLE
+
+// Liquid Glass 2.0（API 33+，以下版本自动回退）
+glassView.material = GlassMaterial.REGULAR      // 或 CLEAR（高透）
+glassView.bevelWidth = 40f                      // 玻璃"厚度"斜面带（px）
+glassView.refractionHeight = 200f               // 边缘折射强度（px）
+glassView.dispersionStrength = 0.10f            // 色散边纹宽度
+glassView.enableSensorHighlight = true          // 高光跟随重力传感器（默认关闭）
+glassView.enableAdaptiveTint = true             // 背景亮度自适应（默认关闭）
+glassView.glassAppearanceListener = { isOverLight ->
+    // 在这里切换前景内容深浅色
+}
+
+// 液态融合（两个玻璃形状像水银一样黏连合并）
+glassView.setPrimaryShape(dockRect, cornerRadiusPx = 36f)
+glassView.setSecondaryShape(bubbleRect, cornerRadiusPx = 44f, smoothing = 40f)
 ```
 
 ### 🎛️ 自定义选项
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `displacementScale` | Float | 70 | 边缘扭曲强度 |
+| `displacementScale` | Float | 70 | 边缘扭曲强度（经典管线） |
 | `blurAmount` | Float | 0.0625 | 模糊半径 (0-1) |
 | `saturation` | Float | 140 | 颜色饱和度百分比 |
 | `aberrationIntensity` | Float | 2 | 色差强度 |
@@ -312,6 +339,13 @@ glassView.blurMethod = BlurMethod.SMART // AUTO, BOX, IIR_GAUSS, DOWNSAMPLE
 | `enableChromaticAberration` | Boolean | true | 启用 RGB 分离 |
 | `enableEdgeHighlight` | Boolean | true | 启用边缘光效 |
 | `blurMethod` | Enum | SMART | 模糊算法选择 |
+| `material` | Enum | REGULAR | 玻璃材质：REGULAR / CLEAR（API 33+） |
+| `bevelWidth` | Float | 40 | 边缘斜面带宽度 px，2-200（API 33+） |
+| `refractionHeight` | Float | 200 | 边缘最大折射位移 px，0-300（API 33+） |
+| `dispersionStrength` | Float | 0.10 | 色散强度 0-1（API 33+） |
+| `enableSensorHighlight` | Boolean | false | 高光跟随设备倾斜（API 33+） |
+| `enableAdaptiveTint` | Boolean | false | 背景亮度自适应染色（API 33+） |
+| `accessibilityMode` | Enum | AUTO | AUTO / FORCE_FULL / FORCE_OPAQUE |
 
 ### 🏗️ 架构
 
@@ -334,14 +368,16 @@ glassView.blurMethod = BlurMethod.SMART // AUTO, BOX, IIR_GAUSS, DOWNSAMPLE
 
 ### 📊 性能
 
+- **GPU 透镜管线（API 33+）**：单 pass AGSL + RenderEffect——零 Bitmap 分配、零像素回读；真机实测每帧 CPU 录制开销约 0.06ms，稳定 60fps
 - **优化渲染**：智能三层缓存策略（背景 → 模糊 → 最终结果）
-- **原生加速**：ARM NEON SIMD 提供 4-8 倍性能提升
+- **原生加速**：ARM NEON SIMD 提供 4-8 倍性能提升（经典管线）
 - **自适应质量**：自动降采样，在中端设备上保持流畅 60fps
 - **内存高效**：位图池和自动资源回收
 
 ### 🔧 要求
 
-- **最低 SDK**: 24 (Android 7.0)
+- **最低 SDK**: 24 (Android 7.0) —— 经典管线
+- **Liquid Glass 2.0 透镜管线**: API 33+ (Android 13)，以下版本自动回退
 - **目标 SDK**: 35 (Android 15)
 - **语言**: Kotlin
 - **NDK**: 需要用于原生模糊加速
