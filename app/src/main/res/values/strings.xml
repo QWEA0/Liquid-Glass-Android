@@ -165,6 +165,12 @@
     <string name="dispersion_cpu_only_note">Dispersion is implemented on the CPU pipeline only — enabling it automatically falls back to CPU rendering.</string>
     <string name="channel_offset_advanced">Advanced · Channel Offsets</string>
 
+    <!-- Interaction / Press Effect -->
+    <string name="section_interaction">Interaction · Press Effect</string>
+    <string name="switch_press_effect">Enable Press Effect</string>
+    <string name="press_scale_value">Press Scale: %.2f</string>
+    <string name="elasticity_value">Elasticity: %.2f</string>
+
     <!-- Liquid Glass 2.0 (Lens Pipeline) -->
     <string name="scene_merge">Merge</string>
     <string name="scene_home">Home Screen</string>

@@ -265,6 +265,15 @@ class LiquidGlassView @JvmOverloads constructor(
 
     var elasticity = 0.15f             // 弹性系数
 
+    /** 点击/按压效果开关（按压缩放 + 拖拽弹性拉伸 + 透镜按压形变） */
+    var enablePressEffect = true
+
+    /** 按压时的缩放目标（1 = 按下不缩放） */
+    var pressScale = 0.95f
+        set(value) {
+            field = value.coerceIn(0.5f, 1f)
+        }
+
     // 圆角半径（运行时可调，GPU/CPU 路径均生效）
     var cornerRadius = 999f
         set(value) {
@@ -579,8 +588,12 @@ class LiquidGlassView @JvmOverloads constructor(
     private var touchX = 0f
     private var touchY = 0f
     private var isPressed = false
-    private var scaleX = 1f
-    private var scaleY = 1f
+
+    // 缩放状态：按压缩放（动画驱动）与弹性拉伸（拖拽驱动）相乘后
+    // 应用到 View 变换属性（见 applyGlassScale）
+    private var basePressScale = 1f
+    private var stretchScaleX = 1f
+    private var stretchScaleY = 1f
 
     // 触摸偏移量（归一化，-100 到 100）
     private var touchOffsetX = 0f
@@ -807,17 +820,16 @@ class LiquidGlassView @JvmOverloads constructor(
             }
         }
 
-        // 应用缩放变换
-        canvas.save()
-        canvas.scale(scaleX, scaleY, width / 2f, height / 2f)
-        
+        // 按压/弹性缩放通过 View 变换属性应用（见 applyGlassScale），不在这里做
+        // canvas.scale：onDraw 画布已被裁剪到视图边界，画布缩放超过 1 时（拖拽弹性
+        // 拉伸）左右边缘会被切掉；View 变换在裁剪之后应用，可安全溢出布局边界，
+        // 且子内容（文字等）会跟随一起缩放
+
         // 绘制阴影
         drawShadow(canvas)
-        
+
         // 绘制玻璃效果
         drawGlassEffect(canvas)
-        
-        canvas.restore()
     }
     
     /**
@@ -1503,21 +1515,26 @@ class LiquidGlassView @JvmOverloads constructor(
                 touchY = event.y
                 isPressed = true
                 updateTouchOffset(event.x, event.y)
-                animateScale(true)
-                animatePress(true)
+                if (enablePressEffect) {
+                    animateScale(true)
+                    animatePress(true)
+                }
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
                 touchX = event.x
                 touchY = event.y
                 updateTouchOffset(event.x, event.y)
-                updateElasticScale()
+                if (enablePressEffect) {
+                    updateElasticScale()
+                }
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 isPressed = false
                 touchOffsetX = 0f
                 touchOffsetY = 0f
+                // 无条件归位：即使按住期间效果被关闭，也不能卡在缩放状态
                 animateScale(false)
                 animatePress(false)
                 return true
@@ -1563,51 +1580,72 @@ class LiquidGlassView @JvmOverloads constructor(
     }
     
     /**
+     * 合成缩放并应用到 View 变换属性（setScaleX/setScaleY）
+     *
+     * 不用 onDraw 里的 canvas.scale：视图画布被裁剪到自身边界，缩放超过 1 时
+     * 边缘会被切掉。View 变换在裁剪之后由父视图应用，可以安全溢出布局边界。
+     */
+    private fun applyGlassScale() {
+        scaleX = basePressScale * stretchScaleX
+        scaleY = basePressScale * stretchScaleY
+    }
+
+    /**
      * 更新弹性缩放
      * 对应 React 版本的 calculateElasticScale
      */
     private fun updateElasticScale() {
         val centerX = width / 2f
         val centerY = height / 2f
-        
+
         val deltaX = touchX - centerX
         val deltaY = touchY - centerY
         val centerDistance = sqrt(deltaX * deltaX + deltaY * deltaY)
-        
+
         if (centerDistance < 1f) {
-            scaleX = 1f
-            scaleY = 1f
+            stretchScaleX = 1f
+            stretchScaleY = 1f
+            applyGlassScale()
             return
         }
-        
+
         val normalizedX = deltaX / centerDistance
         val normalizedY = deltaY / centerDistance
         val stretchIntensity = min(centerDistance / 300f, 1f) * elasticity
-        
-        scaleX = 1f + abs(normalizedX) * stretchIntensity * 0.3f - abs(normalizedY) * stretchIntensity * 0.15f
-        scaleY = 1f + abs(normalizedY) * stretchIntensity * 0.3f - abs(normalizedX) * stretchIntensity * 0.15f
-        
-        scaleX = max(0.8f, scaleX)
-        scaleY = max(0.8f, scaleY)
-        
+
+        stretchScaleX = max(0.8f, 1f + abs(normalizedX) * stretchIntensity * 0.3f - abs(normalizedY) * stretchIntensity * 0.15f)
+        stretchScaleY = max(0.8f, 1f + abs(normalizedY) * stretchIntensity * 0.3f - abs(normalizedX) * stretchIntensity * 0.15f)
+
+        applyGlassScale()
         invalidate()
     }
-    
+
     /**
-     * 缩放动画
+     * 按压缩放动画：按下缩到 [pressScale]，松开回到 1
+     *
+     * 只驱动 basePressScale，弹性拉伸由 updateElasticScale 独立驱动、
+     * 二者相乘合成——避免旧实现里动画和拖拽互相覆盖同一个值导致的抖动；
+     * 松手时弹性拉伸随同一动画平滑归位
      */
     private fun animateScale(pressed: Boolean) {
         scaleAnimator?.cancel()
-        
-        val targetScale = if (pressed) 0.95f else 1f
-        
-        scaleAnimator = ValueAnimator.ofFloat(scaleX, targetScale).apply {
+
+        val target = if (pressed) pressScale else 1f
+        val startBase = basePressScale
+        val startStretchX = stretchScaleX
+        val startStretchY = stretchScaleY
+
+        scaleAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 200
             interpolator = DecelerateInterpolator()
             addUpdateListener {
-                val value = it.animatedValue as Float
-                scaleX = value
-                scaleY = value
+                val f = it.animatedValue as Float
+                basePressScale = startBase + (target - startBase) * f
+                if (!pressed) {
+                    stretchScaleX = startStretchX + (1f - startStretchX) * f
+                    stretchScaleY = startStretchY + (1f - startStretchY) * f
+                }
+                applyGlassScale()
                 invalidate()
             }
             start()
@@ -1642,6 +1680,12 @@ class LiquidGlassView @JvmOverloads constructor(
         // ✅ 清理所有缓存和资源
         scaleAnimator?.cancel()
         pressAnimator?.cancel()
+        // 动画中途 detach 时归位缩放/按压状态，重挂载后不残留形变
+        basePressScale = 1f
+        stretchScaleX = 1f
+        stretchScaleY = 1f
+        applyGlassScale()
+        pressDepth = 0f
         enhancedBlurEffect.release()  // 清理增强模糊效果
 
         // 注销传感器光源与亮度采样

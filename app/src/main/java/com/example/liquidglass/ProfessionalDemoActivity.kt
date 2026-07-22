@@ -796,6 +796,9 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         target.enableSensorHighlight = src.enableSensorHighlight
         target.enableAdaptiveTint = src.enableAdaptiveTint
         target.accessibilityMode = src.accessibilityMode
+        target.enablePressEffect = src.enablePressEffect
+        target.pressScale = src.pressScale
+        target.elasticity = src.elasticity
         target.enableBackdropBlur = src.enableBackdropBlur
         target.blurAmount = src.blurAmount
         target.saturation = src.saturation
@@ -949,6 +952,22 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             applyGlass { it.edgeHighlightOpacity = p.toFloat() }
         }
 
+        // ---------- 交互 · 点击效果 ----------
+        val interactionCard = addCard(root, getString(R.string.section_interaction))
+        addSwitchRow(interactionCard, getString(R.string.switch_press_effect), glassView.enablePressEffect) { checked ->
+            applyGlass { it.enablePressEffect = checked }
+        }
+        // 按压缩放 1.00 - 0.80（进度 0 = 不缩放）
+        addSlider(interactionCard, 20, ((1f - glassView.pressScale) * 100).toInt(),
+            { getString(R.string.press_scale_value, 1f - it / 100f) }) { p ->
+            applyGlass { it.pressScale = 1f - p / 100f }
+        }
+        // 弹性系数 0 - 0.50（拖拽时的拉伸强度）
+        addSlider(interactionCard, 50, (glassView.elasticity * 100).toInt(),
+            { getString(R.string.elasticity_value, it / 100f) }) { p ->
+            applyGlass { it.elasticity = p / 100f }
+        }
+
         // ---------- 色彩效果 ----------
         val colorCard = addCard(root, getString(R.string.section_color_effect))
         val initialEffect = when {
@@ -1006,7 +1025,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         }
         addButton(miscCard, getLanguageSwitchButtonText()) {
             val prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-            val currentLang = prefs.getString(KEY_LANGUAGE, LANG_CHINESE) ?: LANG_CHINESE
+            val currentLang = prefs.getString(KEY_LANGUAGE, LANG_ENGLISH) ?: LANG_ENGLISH
             switchLanguage(if (currentLang == LANG_CHINESE) LANG_ENGLISH else LANG_CHINESE)
         }
     }
@@ -1514,7 +1533,8 @@ class ProfessionalDemoActivity : AppCompatActivity() {
 
     private fun applySavedLanguage() {
         val prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-        val savedLang = prefs.getString(KEY_LANGUAGE, LANG_CHINESE) ?: LANG_CHINESE
+        // 默认英文；用户在面板里切换过语言后跟随其选择
+        val savedLang = prefs.getString(KEY_LANGUAGE, LANG_ENGLISH) ?: LANG_ENGLISH
         setAppLocale(savedLang)
     }
 
@@ -1542,7 +1562,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
 
     private fun getLanguageSwitchButtonText(): String {
         val prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-        val currentLang = prefs.getString(KEY_LANGUAGE, LANG_CHINESE) ?: LANG_CHINESE
+        val currentLang = prefs.getString(KEY_LANGUAGE, LANG_ENGLISH) ?: LANG_ENGLISH
         return if (currentLang == LANG_CHINESE) {
             getString(R.string.button_language_english)
         } else {

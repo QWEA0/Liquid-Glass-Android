@@ -165,6 +165,12 @@
     <string name="dispersion_cpu_only_note">色散仅在 CPU 管线实现，启用后会自动回退到 CPU 渲染。</string>
     <string name="channel_offset_advanced">高级 · 通道偏移</string>
 
+    <!-- 交互 · 点击效果 -->
+    <string name="section_interaction">交互 · 点击效果</string>
+    <string name="switch_press_effect">启用点击效果</string>
+    <string name="press_scale_value">按压缩放: %.2f</string>
+    <string name="elasticity_value">弹性系数: %.2f</string>
+
     <!-- Liquid Glass 2.0（透镜管线） -->
     <string name="scene_merge">融合</string>
     <string name="scene_home">桌面</string>
