@@ -18,6 +18,13 @@ android {
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
+
+        // 16KB 页对齐（Android 16 设备的 ELF 对齐要求；NDK r28 起默认，r27 需显式开启）
+        externalNativeBuild {
+            cmake {
+                arguments += "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+            }
+        }
     }
 
     externalNativeBuild {
