@@ -5,10 +5,10 @@
 
 **iOS 26 Liquid Glass — for the Android View system.**<br>
 Real SDF refraction, physical dispersion and sensor-driven specular, in a plain `View`.<br>
-Drop it into the XML layouts you already have. **No Compose migration required.**
+Drop it into the View hierarchy you already have. **No Compose migration required.**
 
 **把 iOS 26 的液态玻璃搬到 Android View 体系** —— 真实 SDF 折射 / 物理色散 / 重力感应高光，<br>
-一个普通 `View`，直接放进你现有的 XML 布局，**不需要迁移到 Compose**。
+一个普通 `View`，直接放进你现有的 View 层级，**不需要迁移到 Compose**。
 
 [![JitPack](https://jitpack.io/v/QWEA0/Liquid-Glass-Android.svg)](https://jitpack.io/#QWEA0/Liquid-Glass-Android)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -45,9 +45,12 @@ A high-performance Liquid Glass / glassmorphism component for the Android **View
 real-time backdrop blur, SDF refraction, chromatic dispersion and liquid-like interactive effects.
 
 > **Why another one?** The existing Android Liquid Glass libraries target Jetpack Compose.
-> If your app is still on XML layouts — as most shipping Android apps are — you can't use them
-> without a UI-framework migration. `LiquidGlassView` is a `FrameLayout` subclass: add it to your
-> layout, put your content inside, done. API 24+, with an AGSL fast path on API 33+.
+> Compose adoption is largely *incremental* — most non-greenfield apps run a hybrid tree with
+> Compose islands inside an existing View hierarchy — so if the screen you want glass on is still
+> a `ViewGroup`, a Compose-only library doesn't help you. `LiquidGlassView` is a `FrameLayout`
+> subclass: add it to your layout, put your content inside, done. API 24+, with an AGSL fast path
+> on API 33+. (Building greenfield in Compose? Use
+> [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) — it's excellent.)
 
 ### ✨ Features
 
@@ -267,7 +270,7 @@ git clone https://github.com/yourusername/liquidglass-android.git
 
 ### 📄 License
 
-This project is open source. Feel free to use it in your projects.
+Released under the [MIT License](LICENSE) — free for commercial use, no attribution required beyond keeping the copyright notice.
 
 ### 🙏 Credits
 
@@ -282,9 +285,11 @@ Inspired by the glassmorphism design trend and liquid-glass-react library.
 一个面向 Android **View 体系**的高性能液态玻璃组件，具有实时背景模糊、SDF 折射、物理色散和液态交互特性。
 
 > **为什么还要再造一个？** 现有的 Android Liquid Glass 库都是给 Jetpack Compose 用的。
-> 如果你的项目还在 XML 布局上——绝大多数已上线的 Android 应用都是——不迁移 UI 框架就用不了。
+> 而 Compose 的落地基本都是*渐进式*的——非全新项目多是混合树，Compose 岛屿嵌在既有的 View
+> 层级里——所以只要你想加玻璃的那个界面还是 `ViewGroup`，纯 Compose 的库就帮不上忙。
 > `LiquidGlassView` 是一个 `FrameLayout` 子类：放进布局、把内容塞进去，就完事了。
 > API 24+，API 33+ 走 AGSL 快速路径。
+> （全新项目、纯 Compose？用 [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass)，那个做得很好。）
 
 <p align="center">
   <img src="assets/hero-lens-detail.jpg" alt="边缘压缩环与色散彩边（1:1 像素）" width="820">
@@ -506,7 +511,7 @@ git clone https://github.com/yourusername/liquidglass-android.git
 
 ### 📄 许可证
 
-本项目为开源项目，欢迎在你的项目中使用。
+本项目基于 [MIT 许可证](LICENSE) 发布——可商用，除保留版权声明外无其他要求。
 
 ### 🙏 致谢
 
