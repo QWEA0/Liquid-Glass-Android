@@ -7,6 +7,8 @@ plugins {
 android {
     namespace = "com.example.liquidglass"
     compileSdk = 35
+    // 锁定 NDK：不指定的话 CI 会用 runner 默认版本，编出的 .so 与本地不一致
+    ndkVersion = "27.0.12077973"
 
     defaultConfig {
         minSdk = 24

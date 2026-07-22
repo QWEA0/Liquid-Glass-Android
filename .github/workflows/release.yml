@@ -1,0 +1,103 @@
+name: Release
+
+# 推送 v* 标签即自动构建签名 demo APK 并发布 Release。
+# 也可在 Actions 页手动触发（workflow_dispatch）做一次演练。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布的标签（留空则只构建、不发布）'
+        required: false
+        type: string
+
+permissions:
+  contents: write        # 创建 Release 需要写权限
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
+        run: |
+          sdkmanager --install "ndk;27.0.12077973" "cmake;3.22.1"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # 密钥不入库：以 base64 形式存在仓库 Secrets 里，构建时还原
+      - name: Restore signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::缺少 KEYSTORE_BASE64 secret，无法产出可安装的签名 APK。"
+            echo "::error::配置方法见 .github/workflows/release.yml 顶部注释。"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > demo-release.jks
+          cat > keystore.properties <<EOF
+          storeFile=demo-release.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - name: Build signed release APK
+        run: ./gradlew :app:assembleRelease --no-daemon
+
+      # 校验产物确实签过名，否则用户下载到的是装不上的包
+      - name: Verify APK is signed
+        run: |
+          APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+          echo "APK_PATH=$APK" >> "$GITHUB_ENV"
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BUILD_TOOLS/apksigner" verify --print-certs "$APK"
+          ls -lh "$APK"
+
+      - name: Clean up secrets from workspace
+        if: always()
+        run: rm -f demo-release.jks keystore.properties
+
+      - name: Publish Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.APK_PATH }}
+          generate_release_notes: true
+          body: |
+            ### Demo APK
+
+            Download the APK below to preview the effects on a device — no build required.
+            API 24+. Signed with the project's demo key (not a Play Store key).
+
+            ### Library
+
+            ```kotlin
+            implementation("com.github.QWEA0.Liquid-Glass-Android:liquidglass:${{ github.ref_name }}")
+            ```
+
+      # 手动触发时不发布，只把产物挂成 artifact 供下载核对
+      - name: Upload artifact (dry run)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-apk
+          path: ${{ env.APK_PATH }}
