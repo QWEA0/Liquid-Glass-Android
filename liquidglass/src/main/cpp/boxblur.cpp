@@ -30,7 +30,13 @@
 #include <android/log.h>
 
 #define LOG_TAG "BoxBlur"
+// 热路径日志（JNI 入口每帧调用）：默认编译为空操作，避免每帧字符串
+// 格式化 + 日志 I/O 的固定开销；排查问题时定义 NATIVEGAUSS_VERBOSE 打开
+#ifdef NATIVEGAUSS_VERBOSE
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+#else
+#define LOGD(...) ((void)0)
+#endif
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 /**

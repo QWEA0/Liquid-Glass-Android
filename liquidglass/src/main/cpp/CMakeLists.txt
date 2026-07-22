@@ -44,8 +44,11 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
 endif()
 
 # Debug 模式
+# 注意保持 -O2：模糊/色差是每帧热路径，-O0 下 NEON 代码慢约 10 倍
+# （实测 blur 76ms vs 7.7ms），debug 包会呈现 9 FPS 的假性能。
+# 需要单步调试 native 时临时改回 -O0。
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O2 -g")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG")
     message(STATUS "Debug build: ${CMAKE_CXX_FLAGS_DEBUG}")
 endif()
