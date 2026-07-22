@@ -52,6 +52,19 @@ real-time backdrop blur, SDF refraction, chromatic dispersion and liquid-like in
 > on API 33+. (Building greenfield in Compose? Use
 > [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) — it's excellent.)
 
+#### Which Liquid Glass library should I use?
+
+These libraries target different view systems — pick by UI toolkit, not by feature list.
+
+| The screen you're adding glass to | Use |
+|---|---|
+| Android **View / XML** layout, `ViewGroup` hierarchy | **this library** |
+| **Jetpack Compose** (`@Composable`) | [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) |
+| Must support **API 24–32** | **this library** (C++/NEON fallback; the Compose libraries need AGSL, API 33+) |
+| Compose Multiplatform / shared iOS + Android UI | [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) |
+
+If you're Compose-first, use Kyant0's — don't wrap this one in an `AndroidView`.
+
 ### ✨ Features
 
 **Liquid Glass 2.0 (API 33+, single-pass AGSL lens pipeline)**
@@ -124,93 +137,210 @@ The library ships as the `:liquidglass` module (AAR with prebuilt native `.so` f
 
 ### 🚀 Quick Start
 
-#### 1. Add to Your Layout
+#### Complete working example
+
+Everything needed to get one glass pill on screen. `LiquidGlassView` samples whatever is
+drawn **behind** it, so the background content must come first in an overlapping parent.
 
 ```xml
-<com.example.liquidglass.LiquidGlassView
-    android:layout_width="200dp"
-    android:layout_height="80dp"
-    app:blurAmount="0.0625"
-    app:saturation="140"
-    app:aberrationIntensity="2"
-    app:elasticity="0.15"
-    app:cornerRadius="999dp"
-    app:glassMaterial="regular"
-    app:bevelWidth="14dp"
-    app:refractionHeight="66dp"
-    app:dispersionStrength="0.10"
-    app:sensorHighlight="true"
-    app:adaptiveTint="true">
+<!-- res/layout/activity_main.xml -->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
 
-    <!-- Your content here -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Glass Button"
-        android:textColor="#FFFFFF"
-        android:layout_gravity="center" />
+    <!-- Anything you want refracted. Detail matters: refraction is invisible
+         over a flat colour or a smooth gradient. -->
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:src="@drawable/your_background" />
 
-</com.example.liquidglass.LiquidGlassView>
+    <com.example.liquidglass.LiquidGlassView
+        android:id="@+id/glass"
+        android:layout_width="280dp"
+        android:layout_height="96dp"
+        android:layout_gravity="center"
+        app:cornerRadius="999dp"
+        app:glassMaterial="regular"
+        app:refractionHeight="66dp"
+        app:bevelWidth="14dp"
+        app:dispersionStrength="0.12"
+        app:sensorHighlight="true"
+        app:adaptiveTint="true">
+
+        <!-- Your content goes inside — it's a FrameLayout -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="Liquid Glass"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp" />
+
+    </com.example.liquidglass.LiquidGlassView>
+</FrameLayout>
 ```
 
-#### 2. Customize in Code
+```kotlin
+import com.example.liquidglass.GlassMaterial
+import com.example.liquidglass.LiquidGlassView
+
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        val glass = findViewById<LiquidGlassView>(R.id.glass)
+
+        // REQUIRED whenever the backdrop moves, or the glass itself moves.
+        // Defaults to false — forgetting this is the #1 integration mistake:
+        // the backdrop is captured once and the glass looks frozen.
+        glass.enableDynamicBackground = true
+    }
+}
+```
+
+That is the whole integration. Everything below is optional tuning.
+
+#### Tuning in code
 
 ```kotlin
-val glassView = findViewById<LiquidGlassView>(R.id.glassView)
+// --- Liquid Glass 2.0 lens pipeline (API 33+, silently no-ops below) ---
+glass.material = GlassMaterial.REGULAR      // REGULAR (readability) | CLEAR (over media)
+glass.refractionHeight = 200f               // dominant knob: how much lens. px, 0-300
+glass.bevelWidth = 40f                      // glass "thickness" band. px, 2-200
+glass.dispersionStrength = 0.10f            // rim spectral fringe, 0-1. >0.25 reads as rainbow
+glass.enableSensorHighlight = true          // highlight tracks device tilt
+glass.enableAdaptiveTint = true             // tint follows backdrop luminance
 
-// Enable/disable effects
-glassView.enableBackdropBlur = true
-glassView.enableChromaticAberration = true
-glassView.enableEdgeHighlight = true
-
-// Adjust parameters
-glassView.blurAmount = 0.0625f
-glassView.saturation = 140f
-glassView.aberrationIntensity = 2f
-glassView.displacementScale = 70f
-
-// Choose blur method
-glassView.blurMethod = BlurMethod.SMART // AUTO, BOX, IIR_GAUSS, DOWNSAMPLE
-
-// Liquid Glass 2.0 (API 33+, auto-fallback below)
-glassView.material = GlassMaterial.REGULAR      // or CLEAR
-glassView.bevelWidth = 40f                      // glass "thickness" band (px)
-glassView.refractionHeight = 200f               // edge refraction strength (px)
-glassView.dispersionStrength = 0.10f            // spectral fringe width
-glassView.enableSensorHighlight = true          // gravity-driven highlight (default off)
-glassView.enableAdaptiveTint = true             // luminance-adaptive tint (default off)
-glassView.glassAppearanceListener = { isOverLight ->
-    // flip your foreground content color here
+// Flip your foreground colour when the backdrop goes light/dark
+glass.glassAppearanceListener = { isOverLight ->
+    label.setTextColor(if (isOverLight) Color.BLACK else Color.WHITE)
 }
 
-// Liquid merge (two shapes blending like mercury)
-glassView.setPrimaryShape(dockRect, cornerRadiusPx = 36f)
-glassView.setSecondaryShape(bubbleRect, cornerRadiusPx = 44f, smoothing = 40f)
+// Liquid merge — two shapes blend with a smooth-min, like mercury (API 33+)
+glass.setPrimaryShape(dockRect, cornerRadiusPx = 36f)
+glass.setSecondaryShape(bubbleRect, cornerRadiusPx = 44f, smoothing = 40f)
+
+// --- Classic pipeline (API 24+) ---
+glass.blurAmount = 0.0625f
+glass.saturation = 140f
+glass.aberrationIntensity = 2f
+glass.blurMethod = BlurMethod.SMART         // see the enum table below for valid names
 ```
 
 ### 🎛️ Customization Options
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `displacementScale` | Float | 70 | Edge distortion intensity (classic pipeline) |
-| `blurAmount` | Float | 0.0625 | Blur radius (0-1) |
-| `saturation` | Float | 140 | Color saturation percentage |
-| `aberrationIntensity` | Float | 2 | Chromatic aberration strength |
-| `elasticity` | Float | 0.15 | Touch interaction spring effect |
-| `cornerRadius` | Float | 999 | Corner radius (999 = pill shape) |
-| `enableBackdropBlur` | Boolean | true | Enable background blur |
-| `enableChromaticAberration` | Boolean | true | Enable RGB separation |
-| `enableEdgeHighlight` | Boolean | true | Enable edge lighting |
-| `blurMethod` | Enum | SMART | Blur algorithm selection |
-| `material` | Enum | REGULAR | Glass material: REGULAR / CLEAR (API 33+) |
-| `bevelWidth` | Float | 40 | Edge bevel band width in px, 2-200 (API 33+) |
-| `refractionHeight` | Float | 200 | Max edge refraction in px, 0-300 (API 33+) |
-| `dispersionStrength` | Float | 0.10 | Dispersion fringe strength 0-1 (API 33+) |
-| `enableSensorHighlight` | Boolean | false | Highlight follows device tilt (API 33+) |
-| `enableAdaptiveTint` | Boolean | false | Luminance-adaptive tint (API 33+) |
-| `accessibilityMode` | Enum | AUTO | AUTO / FORCE_FULL / FORCE_OPAQUE |
+All properties live on `LiquidGlassView`. Properties marked **33+** belong to the AGSL lens
+pipeline; below API 33 they are accepted and silently ignored — no exception is thrown.
+
+| Property | Type | Default | Range | Notes |
+|---|---|---|---|---|
+| `enableDynamicBackground` | Boolean | `false` | — | **Set to `true`** if the backdrop or the glass moves. Otherwise the backdrop is captured once. |
+| `cornerRadius` | Float | `999f` | px | `999f` = pill. The SDF tracks this, so refraction follows the radius. |
+| `material` | `GlassMaterial` | `REGULAR` | — | **33+** `REGULAR` = readability first · `CLEAR` = over media |
+| `refractionHeight` | Float | `200f` | 0–300 px | **33+** Dominant knob for lens strength |
+| `bevelWidth` | Float | `40f` | 2–200 px | **33+** Width of the edge "thickness" band |
+| `dispersionStrength` | Float | `0.10f` | 0–1 | **33+** Rim spectral fringe. Above ~0.25 reads as rainbow |
+| `enableSensorHighlight` | Boolean | `false` | — | **33+** Specular follows device tilt (gravity sensor) |
+| `enableAdaptiveTint` | Boolean | `false` | — | **33+** Tint adapts to backdrop luminance |
+| `useShaderPipeline` | Boolean | `true` | — | `false` forces the classic pipeline even on 33+ |
+| `useHardwareBlurWhenPossible` | Boolean | `true` | — | `false` also disables the lens pipeline, not just hardware blur |
+| `blurAmount` | Float | `0.0625f` | 0–1 | Blur radius as a fraction of view size |
+| `saturation` | Float | `140f` | percent | 100 = unchanged |
+| `aberrationIntensity` | Float | `2f` | — | Classic RGB-separation strength |
+| `displacementScale` | Float | `70f` | — | Classic edge distortion |
+| `elasticity` | Float | `0.15f` | — | Touch spring response |
+| `blurMethod` | `BlurMethod` | `SMART` | — | See enum table below |
+| `enableBackdropBlur` | Boolean | `true` | — | |
+| `enableChromaticAberration` | Boolean | `true` | — | Classic pipeline |
+| `enableChromaticDispersion` | Boolean | `false` | — | Physical dispersion (classic pipeline) |
+| `enableEdgeHighlight` | Boolean | `true` | — | |
+| `enableShadow` | Boolean | `false` | — | |
+| `edgeHighlightBorderWidth` | Float | `1.5f` | px | |
+| `edgeHighlightOpacity` | Float | `100f` | 0–100 | |
+| `accessibilityMode` | `GlassAccessibilityMode` | `AUTO` | — | `AUTO` honours system high-contrast / reduced-motion / battery saver |
+| `downsampleScale` | Int | `2` | — | Higher = faster, softer |
+| `highQualityBlur` | Boolean | `false` | — | |
+| `collectFrameStats` | Boolean | `true` | — | Profiling aid; turn off in production |
+| `glassAppearanceListener` | `((Boolean) -> Unit)?` | `null` | — | Fires when backdrop luminance flips light/dark |
+
+#### XML attributes
+
+Declared under the `LiquidGlassView` styleable, namespace `app`:
+
+`displacementScale` · `blurAmount` · `saturation` · `aberrationIntensity` · `elasticity` ·
+`cornerRadius` (dimension) · `glassMaterial` (`regular` | `clear`) · `bevelWidth` (dimension) ·
+`refractionHeight` (dimension) · `dispersionStrength` · `sensorHighlight` · `adaptiveTint`
+
+#### Enum values
+
+Exact spelling — invented constants are the usual cause of a failed build.
+
+| Enum | Valid values |
+|---|---|
+| `BlurMethod` | `BOX_BLUR` · `BOX_BLUR_CPP` · `IIR_GAUSSIAN` · `IIR_GAUSSIAN_NEON` · `SMART` · `DOWNSAMPLE` |
+| `GlassMaterial` | `REGULAR` · `CLEAR` |
+| `GlassAccessibilityMode` | `AUTO` · `FORCE_FULL` · `FORCE_OPAQUE` |
+| `ScrollEdgeBlurView.Edge` | `TOP` · `BOTTOM` |
+
+#### Methods
+
+| Signature | Notes |
+|---|---|
+| `setPrimaryShape(rect: RectF?, cornerRadiusPx: Float = cornerRadius)` | `null` = use the whole view |
+| `setSecondaryShape(rect: RectF?, cornerRadiusPx: Float = 999f, smoothing: Float = 48f)` | **33+** Two shapes blend with smooth-min, like mercury |
+| `setCustomBackdropCapture(capture: (RectF) -> Bitmap?)` | Supply your own backdrop source |
+| `refreshAccessibilityState()` | Re-read system accessibility settings |
+
+`ScrollEdgeBlurView` — progressive scroll-edge blur: `edge`, `maxBlurRadius`,
+`bindScrollView(view)`.
 
 See [docs/LIQUID_GLASS_V2.md](docs/LIQUID_GLASS_V2.md) for the full lens-pipeline documentation.
+
+> **Using an AI coding agent?** [llms.txt](llms.txt) is a condensed, machine-readable digest of
+> this API, and [AGENTS.md](AGENTS.md) has an integration checklist plus the mistakes agents
+> most often make with this library.
+
+### ❓ FAQ
+
+**How do I add iOS 26 Liquid Glass to an existing Android XML layout?**
+Add the JitPack repo and the `:liquidglass` dependency, then put a
+`com.example.liquidglass.LiquidGlassView` in your layout over some background content and
+set `enableDynamicBackground = true`. Full snippet in [Quick Start](#-quick-start).
+
+**Can I use this from Jetpack Compose?**
+You can via `AndroidView`, but you shouldn't. Use
+[Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) instead — it's
+built for Compose and is more mature. This library exists for the View system.
+
+**I added the view but I don't see any effect. Why?**
+Three usual causes, in order of likelihood:
+1. `enableDynamicBackground` is still `false`, so the backdrop was captured once.
+2. Nothing is drawn behind the glass — it samples its parent's backdrop, so it needs a
+   sibling painted before it in an overlapping parent.
+3. The backdrop is a flat colour or a smooth gradient. **Refraction and dispersion are
+   invisible without high-frequency detail.** Test over an icon grid, text, or a photo.
+
+**Does it work below Android 13 (API 33)?**
+Yes, down to API 24. Below 33 the AGSL lens pipeline is unavailable, so the library falls
+back to a C++/NEON blur + chromatic aberration pipeline. The 2.0 properties are accepted
+and ignored rather than throwing, so you don't need `Build.VERSION` guards.
+
+**Is it free for commercial use?**
+Yes. MIT — keep the copyright notice, nothing else required.
+
+**What's the performance cost?**
+On a 2024-class device the AGSL pipeline runs the lens in well under 1 ms per frame at 60 fps
+(the demo app's overlay reports live `FrameStats`). The classic pipeline is heavier; tune
+`downsampleScale` and `blurMethod` if you need headroom.
+
+**Why is the artifact `com.github.QWEA0.Liquid-Glass-Android:liquidglass`?**
+JitPack derives coordinates from the GitHub path, and `:liquidglass` selects the library
+module. Dropping the module suffix resolves the demo app instead.
 
 ### 🏗️ Architecture
 
@@ -291,6 +421,19 @@ Inspired by the glassmorphism design trend and liquid-glass-react library.
 > API 24+，API 33+ 走 AGSL 快速路径。
 > （全新项目、纯 Compose？用 [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass)，那个做得很好。）
 
+#### 该用哪个液态玻璃库？
+
+三个库面向的是不同的视图体系，按 UI 框架选，不要按功能列表选。
+
+| 你要加玻璃的那个界面 | 用哪个 |
+|---|---|
+| Android **View / XML** 布局，`ViewGroup` 层级 | **本库** |
+| **Jetpack Compose**（`@Composable`） | [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) |
+| 需要兼容 **API 24–32** | **本库**（C++/NEON 降级管线；Compose 那几个库需要 AGSL，即 API 33+） |
+| Compose Multiplatform / iOS + Android 共用 UI | [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) |
+
+如果你的项目是 Compose 优先，直接用 Kyant0 的，别把本库塞进 `AndroidView` 里包一层。
+
 <p align="center">
   <img src="assets/hero-lens-detail.jpg" alt="边缘压缩环与色散彩边（1:1 像素）" width="820">
 </p>
@@ -318,6 +461,9 @@ Inspired by the glassmorphism design trend and liquid-glass-react library.
 - **🔧 高度可定制** - 精细调节玻璃效果的每个方面
 
 完整透镜管线文档见 [docs/LIQUID_GLASS_V2.md](docs/LIQUID_GLASS_V2.md)。
+
+> **在用 AI 编程助手？**[llms.txt](llms.txt) 是这套 API 的机器可读精简版，
+> [AGENTS.md](AGENTS.md) 里有接入清单和 agent 最常犯的几个错。
 
 ### 📱 演示
 
@@ -367,91 +513,202 @@ dependencies {
 
 ### 🚀 快速开始
 
-#### 1. 添加到布局文件
+#### 完整可运行示例
+
+跑起一颗玻璃药丸所需的全部代码。`LiquidGlassView` 采样的是绘制在它**背后**的内容，
+所以背景内容必须在重叠父容器里排在它前面。
 
 ```xml
-<com.example.liquidglass.LiquidGlassView
-    android:layout_width="200dp"
-    android:layout_height="80dp"
-    app:blurAmount="0.0625"
-    app:saturation="140"
-    app:aberrationIntensity="2"
-    app:elasticity="0.15"
-    app:cornerRadius="999dp"
-    app:glassMaterial="regular"
-    app:bevelWidth="14dp"
-    app:refractionHeight="66dp"
-    app:dispersionStrength="0.10"
-    app:sensorHighlight="true"
-    app:adaptiveTint="true">
+<!-- res/layout/activity_main.xml -->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
 
-    <!-- 在这里放置你的内容 -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="玻璃按钮"
-        android:textColor="#FFFFFF"
-        android:layout_gravity="center" />
+    <!-- 任何你想被折射的东西。细节很重要：纯色和平滑渐变上看不出折射 -->
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:src="@drawable/your_background" />
 
-</com.example.liquidglass.LiquidGlassView>
+    <com.example.liquidglass.LiquidGlassView
+        android:id="@+id/glass"
+        android:layout_width="280dp"
+        android:layout_height="96dp"
+        android:layout_gravity="center"
+        app:cornerRadius="999dp"
+        app:glassMaterial="regular"
+        app:refractionHeight="66dp"
+        app:bevelWidth="14dp"
+        app:dispersionStrength="0.12"
+        app:sensorHighlight="true"
+        app:adaptiveTint="true">
+
+        <!-- 你的内容直接放在里面，它就是个 FrameLayout -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="Liquid Glass"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp" />
+
+    </com.example.liquidglass.LiquidGlassView>
+</FrameLayout>
 ```
 
-#### 2. 代码中自定义
+```kotlin
+import com.example.liquidglass.GlassMaterial
+import com.example.liquidglass.LiquidGlassView
+
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        val glass = findViewById<LiquidGlassView>(R.id.glass)
+
+        // 背景会动、或者玻璃自己会动时【必须】开启。
+        // 默认 false —— 漏掉这行是最常见的接入错误：
+        // 背景只会被捕获一次，玻璃看起来像是冻住了。
+        glass.enableDynamicBackground = true
+    }
+}
+```
+
+接入到此为止，下面全是可选调优。
+
+#### 代码中调参
 
 ```kotlin
-val glassView = findViewById<LiquidGlassView>(R.id.glassView)
+// --- Liquid Glass 2.0 透镜管线（API 33+，低版本静默降级，不抛异常）---
+glass.material = GlassMaterial.REGULAR      // REGULAR 重可读性 | CLEAR 覆盖媒体内容
+glass.refractionHeight = 200f               // 主控旋钮：透镜强度。px，0-300
+glass.bevelWidth = 40f                      // 玻璃"厚度"带宽度。px，2-200
+glass.dispersionStrength = 0.10f            // 边缘色散，0-1。超过 0.25 会像彩虹而不像玻璃
+glass.enableSensorHighlight = true          // 高光跟随设备倾斜
+glass.enableAdaptiveTint = true             // 染色跟随背景明暗
 
-// 启用/禁用效果
-glassView.enableBackdropBlur = true
-glassView.enableChromaticAberration = true
-glassView.enableEdgeHighlight = true
-
-// 调整参数
-glassView.blurAmount = 0.0625f
-glassView.saturation = 140f
-glassView.aberrationIntensity = 2f
-glassView.displacementScale = 70f
-
-// 选择模糊方法
-glassView.blurMethod = BlurMethod.SMART // AUTO, BOX, IIR_GAUSS, DOWNSAMPLE
-
-// Liquid Glass 2.0（API 33+，以下版本自动回退）
-glassView.material = GlassMaterial.REGULAR      // 或 CLEAR（高透）
-glassView.bevelWidth = 40f                      // 玻璃"厚度"斜面带（px）
-glassView.refractionHeight = 200f               // 边缘折射强度（px）
-glassView.dispersionStrength = 0.10f            // 色散边纹宽度
-glassView.enableSensorHighlight = true          // 高光跟随重力传感器（默认关闭）
-glassView.enableAdaptiveTint = true             // 背景亮度自适应（默认关闭）
-glassView.glassAppearanceListener = { isOverLight ->
-    // 在这里切换前景内容深浅色
+// 背景明暗翻转时切换前景色
+glass.glassAppearanceListener = { isOverLight ->
+    label.setTextColor(if (isOverLight) Color.BLACK else Color.WHITE)
 }
 
-// 液态融合（两个玻璃形状像水银一样黏连合并）
-glassView.setPrimaryShape(dockRect, cornerRadiusPx = 36f)
-glassView.setSecondaryShape(bubbleRect, cornerRadiusPx = 44f, smoothing = 40f)
+// 液态融合 —— 双形状 smin 平滑黏连，像水银（API 33+）
+glass.setPrimaryShape(dockRect, cornerRadiusPx = 36f)
+glass.setSecondaryShape(bubbleRect, cornerRadiusPx = 44f, smoothing = 40f)
+
+// --- 经典管线（API 24+）---
+glass.blurAmount = 0.0625f
+glass.saturation = 140f
+glass.aberrationIntensity = 2f
+glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 ```
 
 ### 🎛️ 自定义选项
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `displacementScale` | Float | 70 | 边缘扭曲强度（经典管线） |
-| `blurAmount` | Float | 0.0625 | 模糊半径 (0-1) |
-| `saturation` | Float | 140 | 颜色饱和度百分比 |
-| `aberrationIntensity` | Float | 2 | 色差强度 |
-| `elasticity` | Float | 0.15 | 触摸交互弹性效果 |
-| `cornerRadius` | Float | 999 | 圆角半径 (999 = 胶囊形状) |
-| `enableBackdropBlur` | Boolean | true | 启用背景模糊 |
-| `enableChromaticAberration` | Boolean | true | 启用 RGB 分离 |
-| `enableEdgeHighlight` | Boolean | true | 启用边缘光效 |
-| `blurMethod` | Enum | SMART | 模糊算法选择 |
-| `material` | Enum | REGULAR | 玻璃材质：REGULAR / CLEAR（API 33+） |
-| `bevelWidth` | Float | 40 | 边缘斜面带宽度 px，2-200（API 33+） |
-| `refractionHeight` | Float | 200 | 边缘最大折射位移 px，0-300（API 33+） |
-| `dispersionStrength` | Float | 0.10 | 色散强度 0-1（API 33+） |
-| `enableSensorHighlight` | Boolean | false | 高光跟随设备倾斜（API 33+） |
-| `enableAdaptiveTint` | Boolean | false | 背景亮度自适应染色（API 33+） |
-| `accessibilityMode` | Enum | AUTO | AUTO / FORCE_FULL / FORCE_OPAQUE |
+全部属性都在 `LiquidGlassView` 上。标 **33+** 的属于 AGSL 透镜管线；
+低于 API 33 时这些属性会被接受并静默忽略，不抛异常。
+
+| 属性 | 类型 | 默认值 | 范围 | 说明 |
+|---|---|---|---|---|
+| `enableDynamicBackground` | Boolean | `false` | — | 背景或玻璃会动时**必须设为 `true`**，否则背景只捕获一次 |
+| `cornerRadius` | Float | `999f` | px | `999f` = 药丸形。SDF 跟随此值，折射随圆角变化 |
+| `material` | `GlassMaterial` | `REGULAR` | — | **33+** `REGULAR` 重可读性 · `CLEAR` 覆盖媒体 |
+| `refractionHeight` | Float | `200f` | 0–300 px | **33+** 透镜强度主控旋钮 |
+| `bevelWidth` | Float | `40f` | 2–200 px | **33+** 边缘"厚度"带宽度 |
+| `dispersionStrength` | Float | `0.10f` | 0–1 | **33+** 边缘色散。超过 0.25 会像彩虹 |
+| `enableSensorHighlight` | Boolean | `false` | — | **33+** 高光跟随重力传感器 |
+| `enableAdaptiveTint` | Boolean | `false` | — | **33+** 染色跟随背景亮度 |
+| `useShaderPipeline` | Boolean | `true` | — | 设 `false` 可在 33+ 上强制走经典管线 |
+| `useHardwareBlurWhenPossible` | Boolean | `true` | — | 设 `false` 会连透镜管线一起关掉，不只是硬件模糊 |
+| `blurAmount` | Float | `0.0625f` | 0–1 | 模糊半径（占视图尺寸比例） |
+| `saturation` | Float | `140f` | 百分比 | 100 = 不变 |
+| `aberrationIntensity` | Float | `2f` | — | 经典 RGB 分离强度 |
+| `displacementScale` | Float | `70f` | — | 经典边缘畸变 |
+| `elasticity` | Float | `0.15f` | — | 触摸弹性响应 |
+| `blurMethod` | `BlurMethod` | `SMART` | — | 合法值见下表 |
+| `enableBackdropBlur` | Boolean | `true` | — | |
+| `enableChromaticAberration` | Boolean | `true` | — | 经典管线 |
+| `enableChromaticDispersion` | Boolean | `false` | — | 物理色散（经典管线） |
+| `enableEdgeHighlight` | Boolean | `true` | — | |
+| `enableShadow` | Boolean | `false` | — | |
+| `edgeHighlightBorderWidth` | Float | `1.5f` | px | |
+| `edgeHighlightOpacity` | Float | `100f` | 0–100 | |
+| `accessibilityMode` | `GlassAccessibilityMode` | `AUTO` | — | `AUTO` 尊重系统高对比度 / 移除动画 / 省电模式 |
+| `downsampleScale` | Int | `2` | — | 越大越快越软 |
+| `highQualityBlur` | Boolean | `false` | — | |
+| `collectFrameStats` | Boolean | `true` | — | 性能分析用，生产环境关掉 |
+| `glassAppearanceListener` | `((Boolean) -> Unit)?` | `null` | — | 背景明暗翻转时回调 |
+
+#### XML 属性
+
+声明在 `LiquidGlassView` styleable 下，命名空间 `app`：
+
+`displacementScale` · `blurAmount` · `saturation` · `aberrationIntensity` · `elasticity` ·
+`cornerRadius`（dimension） · `glassMaterial`（`regular` | `clear`） · `bevelWidth`（dimension） ·
+`refractionHeight`（dimension） · `dispersionStrength` · `sensorHighlight` · `adaptiveTint`
+
+#### 枚举值
+
+精确拼写 —— 编不过通常就是枚举名写错了。
+
+| 枚举 | 合法值 |
+|---|---|
+| `BlurMethod` | `BOX_BLUR` · `BOX_BLUR_CPP` · `IIR_GAUSSIAN` · `IIR_GAUSSIAN_NEON` · `SMART` · `DOWNSAMPLE` |
+| `GlassMaterial` | `REGULAR` · `CLEAR` |
+| `GlassAccessibilityMode` | `AUTO` · `FORCE_FULL` · `FORCE_OPAQUE` |
+| `ScrollEdgeBlurView.Edge` | `TOP` · `BOTTOM` |
+
+#### 方法
+
+| 签名 | 说明 |
+|---|---|
+| `setPrimaryShape(rect: RectF?, cornerRadiusPx: Float = cornerRadius)` | 传 `null` = 使用整个视图 |
+| `setSecondaryShape(rect: RectF?, cornerRadiusPx: Float = 999f, smoothing: Float = 48f)` | **33+** 双形状 smin 黏连合并 |
+| `setCustomBackdropCapture(capture: (RectF) -> Bitmap?)` | 自定义背景来源 |
+| `refreshAccessibilityState()` | 重新读取系统无障碍设置 |
+
+`ScrollEdgeBlurView` —— 滚动边缘渐进模糊：`edge`、`maxBlurRadius`、`bindScrollView(view)`。
+
+完整透镜管线文档见 [docs/LIQUID_GLASS_V2.md](docs/LIQUID_GLASS_V2.md)。
+
+### ❓ 常见问题
+
+**怎么在已有的 Android XML 布局里加 iOS 26 液态玻璃？**
+加上 JitPack 仓库和 `:liquidglass` 依赖，在布局里把
+`com.example.liquidglass.LiquidGlassView` 放在某个背景内容之上，然后设
+`enableDynamicBackground = true`。完整代码见[快速开始](#-快速开始)。
+
+**能在 Jetpack Compose 里用吗？**
+用 `AndroidView` 包一层技术上可行，但不建议。请改用
+[Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass)，
+那个是为 Compose 而生的、也更成熟。本库存在的意义就是补 View 体系这一块。
+
+**加上了但看不到任何效果，为什么？**
+三个常见原因，按概率排序：
+1. `enableDynamicBackground` 还是 `false`，背景只被捕获了一次。
+2. 玻璃背后什么都没画。它采样的是父容器的背景，需要在重叠父容器里有个排在它前面的兄弟视图。
+3. 背景是纯色或平滑渐变。**没有高频细节就看不出折射和色散**，
+   请用图标网格、文字或照片测试。
+
+**Android 13（API 33）以下能用吗？**
+能，最低支持到 API 24。低于 33 时没有 AGSL 透镜管线，会降级到 C++/NEON 的
+模糊 + 色差管线。2.0 的属性会被接受并忽略而不是抛异常，所以不需要写 `Build.VERSION` 判断。
+
+**可以商用吗？**
+可以。MIT 协议，保留版权声明即可，没有其他要求。
+
+**性能开销多大？**
+2024 年前后的设备上，AGSL 管线在 60 fps 下每帧透镜耗时远低于 1 ms
+（demo app 的悬浮窗会实时显示 `FrameStats`）。经典管线更重一些，
+需要余量时调 `downsampleScale` 和 `blurMethod`。
+
+**为什么依赖坐标是 `com.github.QWEA0.Liquid-Glass-Android:liquidglass`？**
+JitPack 从 GitHub 路径推导坐标，`:liquidglass` 用于选中库模块。
+漏掉模块名会解析到 demo app 而不是库。
 
 ### 🏗️ 架构
 
