@@ -68,3 +68,8 @@ Thumbs.db
 gradle-app.setting
 !gradle-wrapper.jar
 .gitattributes
+
+# 签名密钥（绝不入库）
+keystore.properties
+*.jks
+*.keystore

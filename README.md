@@ -10,6 +10,7 @@ Drop it into the View hierarchy you already have. **No Compose migration require
 **把 iOS 26 的液态玻璃搬到 Android View 体系** —— 真实 SDF 折射 / 物理色散 / 重力感应高光，<br>
 一个普通 `View`，直接放进你现有的 View 层级，**不需要迁移到 Compose**。
 
+[![Download demo APK](https://img.shields.io/badge/Demo%20APK-download-success?logo=android&logoColor=white)](https://github.com/QWEA0/Liquid-Glass-Android/releases/latest)
 [![JitPack](https://jitpack.io/v/QWEA0/Liquid-Glass-Android.svg)](https://jitpack.io/#QWEA0/Liquid-Glass-Android)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android%20View-green.svg)](https://developer.android.com)
@@ -28,6 +29,8 @@ Drop it into the View hierarchy you already have. **No Compose migration require
 <img src="assets/hero-home-screen.jpg" alt="Liquid glass over an iOS-style home screen" width="272">
 
 <sub>Recorded on a physical device (Android 16, API 36) — not a mockup.</sub>
+
+**[⬇ Download the demo APK](https://github.com/QWEA0/Liquid-Glass-Android/releases/latest)** — 5 MB, API 24+, no build required.
 
 <br>
 
