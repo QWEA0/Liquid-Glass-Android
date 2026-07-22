@@ -21,11 +21,13 @@ package com.example.liquidglass
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Canvas
+import android.graphics.ColorFilter
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Path
 import android.graphics.RenderEffect
 import android.graphics.RenderNode
+import android.graphics.RuntimeColorFilter
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.os.Build
@@ -102,6 +104,9 @@ internal class HardwareBackdropBlur {
     private var effectBuilt = false
 
     private var aberrationShader: RuntimeShader? = null
+
+    // API 36+ vibrancy 饱和度滤镜（非线性；不支持时回退 ColorMatrix）
+    private var vibrancyFilter: RuntimeColorFilter? = null
 
     private val location = IntArray(2)
     private val parentLocation = IntArray(2)
@@ -209,7 +214,7 @@ internal class HardwareBackdropBlur {
 
         if (saturation != 100f) {
             val satEffect = RenderEffect.createColorFilterEffect(
-                ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(saturation / 100f) })
+                saturationFilter(saturation / 100f)
             )
             effect = if (effect != null) {
                 RenderEffect.createChainEffect(satEffect, effect)
@@ -219,6 +224,22 @@ internal class HardwareBackdropBlur {
         }
 
         return effect
+    }
+
+    /**
+     * 饱和度滤镜：API 36+ 用 vibrancy（非线性，AGSL 颜色滤镜），
+     * 以下版本回退线性 ColorMatrix。buildEffect 仅在参数变化时调用，
+     * uniform 在 createColorFilterEffect 时被快照，复用实例安全。
+     */
+    private fun saturationFilter(factor: Float): ColorFilter {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            val vib = vibrancyFilter ?: GlassRuntimeEffects.createVibrancyFilter()?.also { vibrancyFilter = it }
+            if (vib != null) {
+                vib.setFloatUniform("satFactor", factor)
+                return vib
+            }
+        }
+        return ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(factor) })
     }
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)

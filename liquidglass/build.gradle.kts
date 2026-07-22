@@ -6,7 +6,8 @@ plugins {
 
 android {
     namespace = "com.example.liquidglass"
-    compileSdk = 35
+    // API 36：RuntimeColorFilter / RuntimeXfermode（AGSL 颜色滤镜与混合模式）
+    compileSdk = 36
     // 锁定 NDK：不指定的话 CI 会用 runner 默认版本，编出的 .so 与本地不一致
     ndkVersion = "27.0.12077973"
 

@@ -7,7 +7,7 @@
 
 | 条件 | 路径 | 覆盖能力 |
 |---|---|---|
-| API 33+ 且 `useShaderPipeline` | **透镜管线（2.0）** | 模糊、饱和度、SDF 折射、色散、法线高光（传感器光源）、内阴影、自适应染色、Clear 压暗、按压液态、smin 融合 |
+| API 33+ 且 `useShaderPipeline` | **透镜管线（2.0）** | 模糊、饱和度（vibrancy 曲线）、SDF 折射、色散、法线高光（传感器光源）、内阴影、自适应染色（逐像素）、Clear 压暗、按压液态、smin 融合 |
 | API 31–32，或 `useShaderPipeline=false` | 旧 GPU 管线 | 模糊 + 饱和度（33+ 时另有旧位移贴图色差，供 A/B 对比） |
 | API 24–30，或强制 CPU / 自定义背景捕获 | CPU 管线 | 模糊、色差、色散、边缘高光（原有全部能力） |
 | 系统开启「高对比度文字」或 `FORCE_OPAQUE` | 不透明降级 | 实底圆角矩形 + 细边框（对应 iOS Reduce Transparency） |
@@ -28,7 +28,8 @@ backdrop 录制（带 margin 外扩）
          压缩放大带（透镜感）
       6. 色散：R/G/B 三通道折射量 ×(1∓dispersion·slope) → 边缘光谱边纹
       7. 触摸凸起：手指下方高斯泡状局部放大（press uniform 联动）
-      8. 饱和度 → 自适应染色/Clear 压暗
+      8. 饱和度（提饱和端 vibrancy 曲线：低饱和多提/高饱和少提/高光保护）
+         → 自适应染色（enableAdaptiveTint 时按局部亮度逐像素过渡）/Clear 压暗
       9. 镜面高光：dot(N, -L) 主光边 + 0.45× 对侧回光 + 1px 贴边亮线
      10. 内阴影：背光侧边缘内部渐暗（厚度感）
 ```
@@ -55,7 +56,7 @@ backdrop 录制（带 margin 外扩）
 | `refractionHeight` | 200px | 边缘最大折射位移（0-300，采样有安全钳制） |
 | `dispersionStrength` | 0.10 | 色散强度（与色差/色散开关及其滑杆联动） |
 | `enableSensorHighlight` | false | 高光跟随重力传感器（光源固定在世界坐标） |
-| `enableAdaptiveTint` | false | 背景亮度自适应染色（周期采样 + EMA + 滞回） |
+| `enableAdaptiveTint` | false | 背景亮度自适应染色（透镜管线逐像素；亮度计仍供 `glassAppearanceListener` 使用） |
 | `glassAppearanceListener` | null | `(isOverLight) -> Unit`，背景明暗翻转回调（联动前景文字色） |
 | `isOverLightBackground` | — | 当前明暗判定（只读） |
 | `accessibilityMode` | AUTO | `AUTO` / `FORCE_FULL` / `FORCE_OPAQUE` |
@@ -124,3 +125,23 @@ backdrop 录制（带 margin 外扩）
 - 调试面板「渲染路径」改为三档：**透镜 2.0 / 经典 GPU / 强制 CPU**；
   透镜档展开材质、传感器高光、亮度自适应、斜面/折射/色散滑杆与无障碍降级开关。
 - 主玻璃按钮文字颜色随 `glassAppearanceListener` 自动明暗翻转。
+
+## API 36 运行时效果（Android 16）
+
+Android 16 把 AGSL 扩展到了 `RuntimeColorFilter`（自定义颜色滤镜）和
+`RuntimeXfermode`（自定义混合模式）。库在 API 36+ 自动启用三个增强
+（`GlassRuntimeEffects`，无新增公开 API，低版本静默走原路径）：
+
+| 效果 | 落点 | 低版本回退 |
+|---|---|---|
+| vibrancy 非线性饱和度（低饱和多提、高饱和少提、高光保护） | 旧 GPU 管线的 RenderEffect 链、CPU 管线最终绘制 | 线性 `ColorMatrixColorFilter` |
+| 边缘高光单 pass 融合（screen+overlay 合一，并按边框底下像素亮度逐像素调整，亮背景处转为轻微压暗描边） | `EdgeHighlightEffect`（旧 GPU / CPU 管线的描边） | SCREEN + OVERLAY 双 pass |
+| 逐像素自适应染色 | CPU 管线的染色覆盖层 | 全局染色色值 |
+
+透镜管线（API 33+）不依赖这两个类：vibrancy 曲线和逐像素自适应染色直接写进
+LENS_AGSL，也就是说 **API 33 起透镜路径就有逐像素染色**，API 36 只是把同等
+质量补齐到旧 GPU / CPU 路径。三段 AGSL 编译失败时置 broken 标志永久回退，
+与透镜管线的 `shaderBroken` 同一约定。
+
+预乘注意：RuntimeXfermode/RuntimeColorFilter 的输入输出都是预乘 alpha，
+AGSL 内先除 alpha 转直通色、返回前乘回（见 GlassRuntimeEffects 注释）。

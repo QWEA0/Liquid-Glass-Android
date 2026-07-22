@@ -427,6 +427,14 @@ class LiquidGlassView @JvmOverloads constructor(
     private var adaptiveTintColor = 0x24FFFFFF
     private var lastAppliedTint = 0
 
+    // API 36+ AGSL 运行时效果（CPU 管线的最终合成用；不支持时为 null 走回退）
+    private var adaptiveTintBlender: RuntimeXfermode? = null
+    private var adaptiveTintBlenderTried = false
+    private var vibrancySatFilter: RuntimeColorFilter? = null
+    private var vibrancySatTried = false
+    private var vibrancySatFor = Float.NaN
+    private var paintFilterIsVibrancy = false
+
     // 无障碍状态缓存（attach 时刷新，宿主可调用 refreshAccessibilityState 主动刷新）
     private var a11yReducedTransparency = false
     private var a11yReducedMotion = false
@@ -697,12 +705,42 @@ class LiquidGlassView @JvmOverloads constructor(
 
     /**
      * 更新饱和度滤镜（在最终绘制时应用，省掉一次全图复制的独立 pass）
+     *
+     * 这里只准备线性 ColorMatrix（回退状态，软件画布也能执行）；
+     * API 36+ 硬件画布在绘制前由 [applySaturationFilter] 换用 vibrancy 版本
      */
     private fun updateSaturationFilter() {
         paint.colorFilter = if (saturation != 100f) {
             ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(saturation / 100f) })
         } else {
             null
+        }
+        paintFilterIsVibrancy = false
+    }
+
+    /**
+     * 绘制前按画布类型选择饱和度滤镜：API 36+ 硬件画布用 vibrancy
+     * （非线性：低饱和多提、高饱和少提、高光保护，与透镜管线同曲线），
+     * 软件画布不能执行 AGSL，保持/换回线性 ColorMatrix
+     */
+    private fun applySaturationFilter(hardwareCanvas: Boolean) {
+        if (saturation == 100f) return
+        if (!hardwareCanvas || Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA) {
+            if (paintFilterIsVibrancy) updateSaturationFilter()
+            return
+        }
+        if (!vibrancySatTried) {
+            vibrancySatTried = true
+            vibrancySatFilter = GlassRuntimeEffects.createVibrancyFilter()
+        }
+        val vib = vibrancySatFilter ?: return  // 不支持：保持线性滤镜
+        val factor = saturation / 100f
+        if (!paintFilterIsVibrancy || vibrancySatFor != factor) {
+            vib.setFloatUniform("satFactor", factor)
+            // 重新赋值触发 Paint 重新快照滤镜（仅换 uniform 不重挂不生效）
+            paint.colorFilter = vib
+            paintFilterIsVibrancy = true
+            vibrancySatFor = factor
         }
     }
     
@@ -741,6 +779,7 @@ class LiquidGlassView @JvmOverloads constructor(
     /** 透镜管线（API 33+）不使用位移贴图；仅旧管线可能用到时才生成 */
     private fun lensPathLikely(): Boolean =
         useShaderPipeline && useHardwareBlurWhenPossible &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             GlassLensRenderer.isSupported() && lensRenderer?.isAvailable != false
 
     private fun maybeGenerateDisplacementMaps() {
@@ -893,13 +932,35 @@ class LiquidGlassView @JvmOverloads constructor(
 
                 resultSrcRect.set(0, 0, it.width, it.height)
                 resultDstRect.set(0, 0, width, height)
+                applySaturationFilter(canvas.isHardwareAccelerated)
                 canvas.drawBitmap(it, resultSrcRect, resultDstRect, paint)
 
                 // 自适应染色 / 材质染色（CPU 路径用覆盖层近似透镜管线的 tint）
-                val tint = currentTintColor()
-                if (Color.alpha(tint) > 0) {
-                    tintOverlayPaint.color = tint
-                    canvas.drawPath(clipPath, tintOverlayPaint)
+                // API 36+ 硬件画布：RuntimeXfermode 按局部亮度逐像素染色
+                // （与透镜管线同一条曲线），否则回退全局染色覆盖层
+                var perPixelTinted = false
+                if (material.adaptiveTint && enableAdaptiveTint &&
+                    canvas.isHardwareAccelerated && GlassRuntimeEffects.isSupported
+                ) {
+                    if (!adaptiveTintBlenderTried) {
+                        adaptiveTintBlenderTried = true
+                        adaptiveTintBlender = GlassRuntimeEffects.createAdaptiveTintBlender()
+                    }
+                    val blender = adaptiveTintBlender
+                    if (blender != null) {
+                        tintOverlayPaint.color = Color.WHITE
+                        tintOverlayPaint.xfermode = blender
+                        canvas.drawPath(clipPath, tintOverlayPaint)
+                        tintOverlayPaint.xfermode = null
+                        perPixelTinted = true
+                    }
+                }
+                if (!perPixelTinted) {
+                    val tint = currentTintColor()
+                    if (Color.alpha(tint) > 0) {
+                        tintOverlayPaint.color = tint
+                        canvas.drawPath(clipPath, tintOverlayPaint)
+                    }
                 }
 
                 canvas.restoreToCount(saveCount)
@@ -930,6 +991,7 @@ class LiquidGlassView @JvmOverloads constructor(
      */
     private fun tryDrawLensGlass(canvas: Canvas, blurRadius: Float): Boolean {
         if (!useShaderPipeline || !useHardwareBlurWhenPossible) return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
         if (!GlassLensRenderer.isSupported()) return false
         if (!canvas.isHardwareAccelerated) return false
         if (customBackdropCapture != null) return false
@@ -994,6 +1056,10 @@ class LiquidGlassView @JvmOverloads constructor(
 
         val margin = computeLensMargin(radius)
 
+        // —— 染色：Regular + 自适应时改走着色器内逐像素染色；tint 固定传 0，
+        // 避免亮度采样 tick 更新全局染色触发无意义的 effect 重建 ——
+        val adaptivePerPixel = material.adaptiveTint && enableAdaptiveTint
+
         val params = GlassLensRenderer.LensParams(
             blurRadius = radius,
             shape1CX = s1cx, shape1CY = s1cy, shape1HW = s1hw, shape1HH = s1hh, radius1 = r1,
@@ -1006,7 +1072,8 @@ class LiquidGlassView @JvmOverloads constructor(
             lightX = lx, lightY = ly,
             spec = spec,
             innerShadow = material.innerShadow,
-            tint = currentTintColor(),
+            tint = if (adaptivePerPixel) 0 else currentTintColor(),
+            adaptiveTint = adaptivePerPixel,
             dim = material.dimAmount,
             saturation = saturation,
             press = press,
@@ -1101,7 +1168,9 @@ class LiquidGlassView @JvmOverloads constructor(
 
     private fun updateSensorRegistration() {
         val want = isAttachedToWindow && enableSensorHighlight && useShaderPipeline &&
-            useHardwareBlurWhenPossible && GlassLensRenderer.isSupported() &&
+            useHardwareBlurWhenPossible &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            GlassLensRenderer.isSupported() &&
             !a11yReducedMotion && !a11yPowerSave
         if (want) {
             LightSourceController.register(this)

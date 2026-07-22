@@ -10,6 +10,10 @@
  *
  * 输出经过 EMA 平滑；"是否亮背景"的翻转带滞回（0.60 / 0.45），
  * 避免背景亮度在阈值附近时外观来回跳变。
+ *
+ * 注意：透镜管线（API 33+）的染色已改为着色器内逐像素自适应，不再消费这里
+ * 的全局色值；本采样器仍是 glassAppearanceListener / isOverLightBackground
+ * （前景内容换色）与 CPU 管线全局染色回退的数据源。
  */
 package com.example.liquidglass
 

@@ -350,6 +350,7 @@ module. Dropping the module suffix resolves the demo app instead.
 **Core Components:**
 - `LiquidGlassView` - Main view component with touch interaction
 - `GlassLensRenderer` - Single-pass AGSL lens pipeline: SDF refraction, dispersion, normal-lit specular, inner shadow, smin merge (API 33+)
+- `GlassRuntimeEffects` - AGSL color filter / blend modes: vibrancy saturation, fused rim highlight, per-pixel adaptive tint (API 36+, auto fallback)
 - `LightSourceController` - Gravity-sensor world-fixed light source for specular highlights
 - `BackdropLuminanceMeter` - Backdrop brightness sampling for adaptive tint
 - `ScrollEdgeBlurView` - Progressive blur overlay (scroll edge effect)
@@ -376,7 +377,8 @@ module. Dropping the module suffix resolves the demo app instead.
 
 - **Min SDK**: 24 (Android 7.0) — classic pipeline
 - **Liquid Glass 2.0 lens pipeline**: API 33+ (Android 13), automatic fallback below
-- **Target SDK**: 35 (Android 15)
+- **AGSL color filter / blend enhancements**: API 36+ (Android 16), automatic — no API change
+- **Target SDK**: 35 (Android 15), compiled against SDK 36
 - **Language**: Kotlin
 - **NDK**: Required for native blur acceleration
 
@@ -718,6 +720,7 @@ JitPack 从 GitHub 路径推导坐标，`:liquidglass` 用于选中库模块。
 **核心组件：**
 - `LiquidGlassView` - 主视图组件，支持触摸交互
 - `GlassLensRenderer` - 单 pass AGSL 透镜管线：SDF 折射、色散、法线高光、内阴影、smin 融合（API 33+）
+- `GlassRuntimeEffects` - AGSL 颜色滤镜/混合模式：vibrancy 饱和度、单 pass 边缘高光、逐像素自适应染色（API 36+，自动回退）
 - `LightSourceController` - 重力传感器世界光源（镜面高光方向）
 - `BackdropLuminanceMeter` - 背景亮度采样（自适应染色数据源）
 - `ScrollEdgeBlurView` - 渐进模糊覆盖层（Scroll Edge Effect）
@@ -744,7 +747,8 @@ JitPack 从 GitHub 路径推导坐标，`:liquidglass` 用于选中库模块。
 
 - **最低 SDK**: 24 (Android 7.0) —— 经典管线
 - **Liquid Glass 2.0 透镜管线**: API 33+ (Android 13)，以下版本自动回退
-- **目标 SDK**: 35 (Android 15)
+- **AGSL 颜色滤镜/混合模式增强**: API 36+ (Android 16)，自动启用，无 API 变化
+- **目标 SDK**: 35 (Android 15)，编译 SDK 36
 - **语言**: Kotlin
 - **NDK**: 需要用于原生模糊加速
 

@@ -11,6 +11,8 @@
 package com.example.liquidglass
 
 import android.graphics.*
+import android.os.Build
+import androidx.annotation.RequiresApi
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -27,6 +29,11 @@ class EdgeHighlightEffect {
     // 缓存的路径对象
     private val borderPath = Path()
     private val innerPath = Path()
+
+    // API 36+ 单 pass 融合混合器（screen+overlay 合一 + 逐像素亮度自适应）；
+    // 创建失败或不支持时保持 null，走双 pass 回退
+    private var rimBlender: RuntimeXfermode? = null
+    private var rimBlenderTried = false
 
     /**
      * 绘制边缘高光效果
@@ -55,11 +62,100 @@ class EdgeHighlightEffect {
             drawOverLightEffect(canvas, bounds, cornerRadius, normalizedOpacity)
         }
 
-        // 2. 绘制边框层 1（Screen 混合模式）
-        drawBorderLayer(canvas, bounds, cornerRadius, mouseOffset, PorterDuff.Mode.SCREEN, 0.2f * normalizedOpacity, borderWidth)
+        // 2. API 36+ 硬件画布：单 pass 融合绘制（screen+overlay 合一，
+        //    并按边框底下像素的实际亮度逐像素自适应），一半绘制开销
+        if (canvas.isHardwareAccelerated && GlassRuntimeEffects.isSupported) {
+            if (!rimBlenderTried) {
+                rimBlenderTried = true
+                rimBlender = GlassRuntimeEffects.createRimBlender()
+            }
+            val blender = rimBlender
+            if (blender != null) {
+                drawBorderLayerFused(canvas, bounds, cornerRadius, mouseOffset, blender, normalizedOpacity, borderWidth)
+                return
+            }
+        }
 
-        // 3. 绘制边框层 2（Overlay 混合模式）
+        // 3. 回退：双 pass PorterDuff（Screen + Overlay）
+        drawBorderLayer(canvas, bounds, cornerRadius, mouseOffset, PorterDuff.Mode.SCREEN, 0.2f * normalizedOpacity, borderWidth)
         drawBorderLayer(canvas, bounds, cornerRadius, mouseOffset, PorterDuff.Mode.OVERLAY, 1.0f * normalizedOpacity, borderWidth)
+    }
+
+    /**
+     * API 36+ 单 pass 融合边框：几何与渐变取自原 Overlay pass（主导层），
+     * Screen 分量的等效权重折算进 RuntimeXfermode（见 GlassRuntimeEffects.RIM_AGSL）
+     */
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
+    private fun drawBorderLayerFused(
+        canvas: Canvas,
+        bounds: RectF,
+        cornerRadius: Float,
+        mouseOffset: PointF,
+        blender: RuntimeXfermode,
+        normalizedOpacity: Float,
+        borderWidth: Float
+    ) {
+        val gradientAngle = 135f + mouseOffset.x * 1.2f
+        val angleRad = Math.toRadians(gradientAngle.toDouble()).toFloat()
+
+        val centerX = bounds.centerX()
+        val centerY = bounds.centerY()
+        val radius = max(bounds.width(), bounds.height()) / 2f
+
+        val startX = centerX - radius * kotlin.math.cos(angleRad)
+        val startY = centerY - radius * kotlin.math.sin(angleRad)
+        val endX = centerX + radius * kotlin.math.cos(angleRad)
+        val endY = centerY + radius * kotlin.math.sin(angleRad)
+
+        // 渐变参数与原 Overlay pass 一致
+        val opacity1 = 0.32f + abs(mouseOffset.x) * 0.008f
+        val opacity2 = 0.6f + abs(mouseOffset.x) * 0.012f
+        val position1 = max(0.1f, 0.33f + mouseOffset.y * 0.003f)
+        val position2 = min(0.9f, 0.66f + mouseOffset.y * 0.004f)
+
+        val gradient = LinearGradient(
+            startX, startY, endX, endY,
+            intArrayOf(
+                Color.argb(0, 255, 255, 255),
+                Color.argb((opacity1 * 255).toInt(), 255, 255, 255),
+                Color.argb((opacity2 * 255).toInt(), 255, 255, 255),
+                Color.argb(0, 255, 255, 255)
+            ),
+            floatArrayOf(0f, position1, position2, 1f),
+            Shader.TileMode.CLAMP
+        )
+
+        buildBorderPath(bounds, cornerRadius, borderWidth)
+
+        borderPaint.reset()
+        borderPaint.isAntiAlias = true
+        borderPaint.shader = gradient
+        borderPaint.alpha = (normalizedOpacity * 255).toInt()
+        borderPaint.xfermode = blender
+
+        canvas.drawPath(borderPath, borderPaint)
+
+        borderPaint.xfermode = null
+        borderPaint.shader = null
+    }
+
+    /**
+     * 构建边框环形路径（外圆角矩形减去内圆角矩形）
+     */
+    private fun buildBorderPath(bounds: RectF, cornerRadius: Float, borderWidth: Float) {
+        borderPath.reset()
+        borderPath.addRoundRect(bounds, cornerRadius, cornerRadius, Path.Direction.CW)
+
+        innerPath.reset()
+        val innerBounds = RectF(
+            bounds.left + borderWidth,
+            bounds.top + borderWidth,
+            bounds.right - borderWidth,
+            bounds.bottom - borderWidth
+        )
+        innerPath.addRoundRect(innerBounds, cornerRadius - borderWidth, cornerRadius - borderWidth, Path.Direction.CW)
+
+        borderPath.op(innerPath, Path.Op.DIFFERENCE)
     }
     
     /**
@@ -141,21 +237,8 @@ class EdgeHighlightEffect {
         )
         
         // 创建边框路径（使用 mask 效果）
-        borderPath.reset()
-        borderPath.addRoundRect(bounds, cornerRadius, cornerRadius, Path.Direction.CW)
-        
-        innerPath.reset()
-        val innerBounds = RectF(
-            bounds.left + borderWidth,
-            bounds.top + borderWidth,
-            bounds.right - borderWidth,
-            bounds.bottom - borderWidth
-        )
-        innerPath.addRoundRect(innerBounds, cornerRadius - borderWidth, cornerRadius - borderWidth, Path.Direction.CW)
-        
-        // 使用 Path.op 创建边框遮罩
-        borderPath.op(innerPath, Path.Op.DIFFERENCE)
-        
+        buildBorderPath(bounds, cornerRadius, borderWidth)
+
         // 绘制边框
         borderPaint.reset()
         borderPaint.isAntiAlias = true

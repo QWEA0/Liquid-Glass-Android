@@ -64,6 +64,7 @@ internal class GlassLensRenderer {
             uniform float  specStrength;
             uniform float  innerShadow;
             uniform float4 tintColor;
+            uniform float  adaptiveTint;
             uniform float  dimAmount;
             uniform float  satFactor;
             uniform float  press;
@@ -155,12 +156,31 @@ internal class GlassLensRenderer {
                     content.eval(cB).b
                 );
 
-                // 饱和度（合并进同一 pass）
+                // 饱和度（合并进同一 pass）；提饱和端走 vibrancy 曲线：低饱和
+                // 像素多提、高饱和像素少提、极亮像素保护，避免线性提饱和把浓色
+                // 推过曝（曲线与 GlassRuntimeEffects 的 API 36 滤镜一致）
                 float lum = dot(col, float3(0.2126, 0.7152, 0.0722));
-                col = mix(float3(lum), col, satFactor);
+                if (satFactor <= 1.0) {
+                    col = mix(float3(lum), col, satFactor);
+                } else {
+                    float satNow = max(col.r, max(col.g, col.b)) - min(col.r, min(col.g, col.b));
+                    float room = 1.0 - smoothstep(0.2, 0.85, satNow);
+                    float hl = 1.0 - smoothstep(0.75, 0.98, lum);
+                    float amount = 1.0 + (satFactor - 1.0) * mix(0.3, 1.0, room * hl);
+                    col = clamp(mix(float3(lum), col, amount), float3(0.0), float3(1.0));
+                }
 
                 // 自适应染色（Regular）/ 压暗层（Clear）
-                col = mix(col, tintColor.rgb, tintColor.a);
+                if (adaptiveTint > 0.5) {
+                    // 逐像素自适应：按局部（模糊后）亮度在提亮/压暗之间平滑过渡，
+                    // 玻璃跨明暗背景时不再整体翻转；曲线与全局版本
+                    // （LiquidGlassView.onLuminanceSample）一致
+                    float lumT = dot(col, float3(0.2126, 0.7152, 0.0722));
+                    float e = smoothstep(0.35, 0.75, lumT);
+                    col = mix(col, float3(1.0 - e), 0.14 + 0.08 * e);
+                } else {
+                    col = mix(col, tintColor.rgb, tintColor.a);
+                }
                 col = col * (1.0 - dimAmount);
 
                 // 光照：同一法线场驱动。高光集中在贴边窄带（宽度与斜面弱相关，
@@ -207,7 +227,8 @@ internal class GlassLensRenderer {
         val lightX: Float, val lightY: Float,
         val spec: Float,
         val innerShadow: Float,
-        val tint: Int,          // straight-alpha ARGB
+        val tint: Int,          // straight-alpha ARGB（adaptiveTint 时被忽略）
+        val adaptiveTint: Boolean, // 逐像素自适应染色（Regular + enableAdaptiveTint）
         val dim: Float,
         val saturation: Float,  // 100 = 原始
         val press: Float,
@@ -336,6 +357,7 @@ internal class GlassLensRenderer {
             Color.blue(p.tint) / 255f,
             Color.alpha(p.tint) / 255f
         )
+        sh.setFloatUniform("adaptiveTint", if (p.adaptiveTint) 1f else 0f)
         sh.setFloatUniform("dimAmount", p.dim)
         sh.setFloatUniform("satFactor", p.saturation / 100f)
         sh.setFloatUniform("press", p.press)
