@@ -45,6 +45,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import com.example.liquidglass.demo.R
 import com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -87,6 +90,9 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     // 性能监控数据源（融合场景使用场景内的玻璃视图）
     private var statsSource: LiquidGlassView? = null
 
+    /** 状态栏高度，由 window insets 回填。场景里顶部对齐的文字/组件靠它避开状态栏与性能悬浮窗 */
+    private var systemBarTop = 0
+
     private var customBackgroundBitmap: Bitmap? = null
     private var scenicBitmap: Bitmap? = null
 
@@ -119,6 +125,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         private const val LANG_CHINESE = "zh"
 
         private const val COLOR_BG = 0xFFF2F2F7.toInt()       // 面板底色
+        private const val COLOR_SCROLL_GUTTER = 0xFF0B1020.toInt()  // 滚动场景上下留白底色
         private const val COLOR_CARD = 0xFFFFFFFF.toInt()     // 卡片
         private const val COLOR_TEXT = 0xFF111111.toInt()     // 主文字
         private const val COLOR_TEXT_DIM = 0xFF8E8E93.toInt() // 次要文字
@@ -129,6 +136,12 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         applySavedLanguage()
         super.onCreate(savedInstanceState)
+        // 演示页全屏展示玻璃效果，ActionBar 只会挡住场景和性能悬浮窗。
+        // 同时让场景铺到系统栏底下——玻璃拖到屏幕边缘时不该被一条纯色带截断。
+        supportActionBar?.hide()
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
 
         createGlassView()
         createMainLayout()
@@ -188,7 +201,9 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 FrameLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.TOP or Gravity.END
-                setMargins(dp(8), dp(40), dp(8), 0)
+                // 顶部间距在下面按真实状态栏 inset 设置：API 35+ 强制 edge-to-edge，
+                // mainContent 从窗口顶端起算，硬编码的 dp 值会被状态栏/刘海盖住
+                setMargins(dp(8), dp(8), dp(8), 0)
             }
             background = GradientDrawable().apply {
                 cornerRadius = dpF(10)
@@ -203,7 +218,8 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         mainContent.addView(tvPerformanceOverlay)
 
         // 场景切换条
-        mainContent.addView(createSceneBar())
+        val sceneBar = createSceneBar()
+        mainContent.addView(sceneBar)
 
         // 设置按钮
         fabSettings = FloatingActionButton(this).apply {
@@ -218,6 +234,26 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             setOnClickListener { drawerLayout.openDrawer(GravityCompat.END) }
         }
         mainContent.addView(fabSettings)
+
+        // 只有覆盖层让开系统栏，场景内容仍然铺满全屏。
+        // 不要用固定 dp 值：状态栏高度随刘海/挖孔变化，手势条与三键导航也差一倍。
+        ViewCompat.setOnApplyWindowInsetsListener(mainContent) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            systemBarTop = bars.top
+            (tvPerformanceOverlay.layoutParams as FrameLayout.LayoutParams).apply {
+                topMargin = bars.top + dp(8)
+                rightMargin = bars.right + dp(8)
+            }
+            (sceneBar.layoutParams as FrameLayout.LayoutParams).bottomMargin = bars.bottom + dp(16)
+            (fabSettings.layoutParams as FrameLayout.LayoutParams).apply {
+                bottomMargin = bars.bottom + dp(84)
+                rightMargin = bars.right + dp(20)
+            }
+            tvPerformanceOverlay.requestLayout()
+            sceneBar.requestLayout()
+            fabSettings.requestLayout()
+            insets
+        }
 
         drawerLayout.addView(mainContent)
         drawerLayout.addView(createDrawer())
@@ -438,7 +474,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 FrameLayout.LayoutParams.WRAP_CONTENT
             ).apply {
                 gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                topMargin = dp(56)
+                topMargin = systemBarTop + dp(58)  // 让开状态栏 + 右上角性能悬浮窗
             }
             setPadding(dp(24), 0, dp(24), 0)
         })
@@ -452,6 +488,9 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
             isVerticalScrollBarEnabled = false
+            // content 上下留白是给顶部渐进模糊留的滚入空间；不铺底色的话
+            // 这两条会直接露出窗口背景，全屏后就是屏幕顶端一条白带
+            setBackgroundColor(COLOR_SCROLL_GUTTER)
         }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -670,7 +709,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 FrameLayout.LayoutParams.MATCH_PARENT, dp(56)
             ).apply {
                 gravity = Gravity.TOP
-                setMargins(dp(16), dp(48), dp(16), 0)
+                setMargins(dp(16), systemBarTop + dp(58), dp(16), 0)  // 让开状态栏 + 性能悬浮窗
             }
             addView(TextView(this@ProfessionalDemoActivity).apply {
                 text = "🧭  Liquid NavBar"
