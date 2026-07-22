@@ -167,6 +167,7 @@
 
     <!-- Liquid Glass 2.0 (Lens Pipeline) -->
     <string name="scene_merge">Merge</string>
+    <string name="scene_home">Home Screen</string>
     <string name="render_lens">Lens 2.0</string>
     <string name="render_classic_gpu">Classic GPU</string>
     <string name="section_lens">Liquid Glass 2.0 · Lens (API 33+)</string>

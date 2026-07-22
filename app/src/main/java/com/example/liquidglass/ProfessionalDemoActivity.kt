@@ -36,6 +36,7 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.LinearInterpolator
@@ -60,6 +61,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         IMAGE(R.string.scene_image),
         ANIMATED(R.string.scene_animated),
         MERGE(R.string.scene_merge),
+        HOME(R.string.scene_home),
         SHOWCASE(R.string.scene_showcase)
     }
 
@@ -279,12 +281,18 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         (glassView.parent as? ViewGroup)?.removeView(glassView)
         sceneHost.removeAllViews()
         statsSource = glassView
+        // HOME 场景会给共享的 glassView 装拖动监听并改 translation，切走时必须还原，
+        // 否则其他场景的居中布局会被上次拖动的位移带偏
+        glassView.setOnTouchListener(null)
+        glassView.translationX = 0f
+        glassView.translationY = 0f
 
         val root = when (scene) {
             Scene.SCROLL -> buildScrollScene()
             Scene.IMAGE -> buildImageScene()
             Scene.ANIMATED -> buildAnimatedScene()
             Scene.MERGE -> buildMergeScene()
+            Scene.HOME -> buildHomeScene()
             Scene.SHOWCASE -> buildShowcaseScene()
         }
         sceneHost.addView(root)
@@ -315,6 +323,53 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         root.addView(edgeBlur)
 
         glassView.layoutParams = centerGlassParams()
+        root.addView(glassView)
+        return root
+    }
+
+    /**
+     * 场景 5：iOS 桌面 —— 壁纸 + 4×6 图标网格 + 可拖动的玻璃药丸。
+     *
+     * 这是 README 首屏用的构图，也是调参时最该用的场景：图标网格提供高频边界，
+     * 折射的边缘压缩环和色散彩边才看得出来。在渐变背景的场景里调 [LiquidGlassView.refractionHeight]
+     * 或 [LiquidGlassView.dispersionStrength] 基本看不出差别。
+     */
+    private fun buildHomeScene(): View {
+        val root = FrameLayout(this)
+
+        root.addView(ImageView(this).apply {
+            setImageResource(R.drawable.ios_wallpaper)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        root.addView(HomeScreenGridView(this), FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        glassView.layoutParams = FrameLayout.LayoutParams(dp(300), dp(112)).apply {
+            gravity = Gravity.CENTER
+        }
+        glassView.setOnTouchListener(object : View.OnTouchListener {
+            private var dx = 0f
+            private var dy = 0f
+            override fun onTouch(v: View, e: MotionEvent): Boolean {
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        dx = v.translationX - e.rawX
+                        dy = v.translationY - e.rawY
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        v.translationX = e.rawX + dx
+                        v.translationY = e.rawY + dy
+                    }
+                }
+                return false  // 继续交给 LiquidGlassView 自己的按压形变逻辑
+            }
+        })
         root.addView(glassView)
         return root
     }

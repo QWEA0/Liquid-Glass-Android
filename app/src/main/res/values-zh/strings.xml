@@ -167,6 +167,7 @@
 
     <!-- Liquid Glass 2.0（透镜管线） -->
     <string name="scene_merge">融合</string>
+    <string name="scene_home">桌面</string>
     <string name="render_lens">透镜 2.0</string>
     <string name="render_classic_gpu">经典 GPU</string>
     <string name="section_lens">Liquid Glass 2.0 · 透镜（API 33+）</string>
