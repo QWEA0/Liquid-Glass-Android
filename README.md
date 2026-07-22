@@ -1,18 +1,35 @@
 ![frontPhoto](assets/banner.png)
 <div align="center">
 
-**A stunning glassmorphism UI component library for Android**
+# LiquidGlass for Android
 
-**令人惊艳的 Android 液态玻璃 UI 组件库**
+**iOS 26 Liquid Glass — for the Android View system.**<br>
+Real SDF refraction, physical dispersion and sensor-driven specular, in a plain `View`.<br>
+Drop it into the XML layouts you already have. **No Compose migration required.**
 
-<p align="center">
-  <img src="assets\2983473432.jpg" alt="LiquidGlass Demo Screenshot" width="260">
-  <img src="assets\2323232323233.jpg" alt="LiquidGlass Demo Screenshot" width="260">
-</p>
+**把 iOS 26 的液态玻璃搬到 Android View 体系** —— 真实 SDF 折射 / 物理色散 / 重力感应高光，<br>
+一个普通 `View`，直接放进你现有的 XML 布局，**不需要迁移到 Compose**。
 
+[![JitPack](https://jitpack.io/v/QWEA0/Liquid-Glass-Android.svg)](https://jitpack.io/#QWEA0/Liquid-Glass-Android)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Android-green.svg)](https://developer.android.com)
+[![Platform](https://img.shields.io/badge/platform-Android%20View-green.svg)](https://developer.android.com)
 [![API](https://img.shields.io/badge/API-24%2B-brightgreen.svg)](https://android-arsenal.com/api?level=24)
+
+<br>
+
+<img src="assets/hero-lens-detail.jpg" alt="Edge compression ring and chromatic dispersion, at 1:1 pixels" width="820">
+
+<sub>1:1 pixels — the icon grid is <b>compressed into the rim</b> by the SDF lens, with per-channel dispersion fringing the edge.</sub>
+
+<br><br>
+
+<img src="assets/hero-refraction.gif" alt="Liquid glass dragged across an iOS-style home screen" width="272">
+&nbsp;&nbsp;
+<img src="assets/hero-home-screen.jpg" alt="Liquid glass over an iOS-style home screen" width="272">
+
+<sub>Recorded on a physical device (Android 16, API 36) — not a mockup.</sub>
+
+<br>
 
 [English](#english) | [中文](#chinese)
 
@@ -24,7 +41,13 @@
 
 ## 🌊 LiquidGlass Android
 
-A high-performance glassmorphism UI component library for Android, featuring real-time backdrop blur, chromatic aberration, and liquid-like interactive effects.
+A high-performance Liquid Glass / glassmorphism component for the Android **View system**, featuring
+real-time backdrop blur, SDF refraction, chromatic dispersion and liquid-like interactive effects.
+
+> **Why another one?** The existing Android Liquid Glass libraries target Jetpack Compose.
+> If your app is still on XML layouts — as most shipping Android apps are — you can't use them
+> without a UI-framework migration. `LiquidGlassView` is a `FrameLayout` subclass: add it to your
+> layout, put your content inside, done. API 24+, with an AGSL fast path on API 33+.
 
 ### ✨ Features
 
@@ -53,11 +76,24 @@ A high-performance glassmorphism UI component library for Android, featuring rea
 
 <div align="center">
 
-#### 🎬 Video Demo
-<img src="assets\mmexport1762090985763.gif" alt="LiquidGlass Demo Screenshot" width="260">
-<img src="assets\1762103926407.gif" alt="LiquidGlass Demo Screenshot" width="260">
+#### 🎬 Live drag & parameter tuning
+
+<img src="assets/demo-glass-drag.gif" alt="Dragging the glass over a gradient backdrop" width="252">
+<img src="assets/demo-glass-params.gif" alt="Tuning lens parameters live" width="252">
+
+#### 🧪 Regular vs. Clear material
+
+<img src="assets/glass-regular-material.jpg" alt="Regular material — readability first" width="252">
+<img src="assets/glass-clear-material.jpg" alt="Clear material — media transparent" width="252">
 
 </div>
+
+Run the sample app for the full playground (4 scenes + a live parameter drawer), or launch the
+hero scene used for the screenshots at the top:
+
+```bash
+adb shell am start -n com.example.liquidglass/com.example.liquidglass.HeroShowcaseActivity
+```
 
 ### 📦 Installation (JitPack)
 
@@ -243,10 +279,15 @@ Inspired by the glassmorphism design trend and liquid-glass-react library.
 
 ## 🌊 LiquidGlass Android
 
-一个高性能的 Android 液态玻璃 UI 组件库，具有实时背景模糊、色差效果和液态交互特性。
+一个面向 Android **View 体系**的高性能液态玻璃组件，具有实时背景模糊、SDF 折射、物理色散和液态交互特性。
+
+> **为什么还要再造一个？** 现有的 Android Liquid Glass 库都是给 Jetpack Compose 用的。
+> 如果你的项目还在 XML 布局上——绝大多数已上线的 Android 应用都是——不迁移 UI 框架就用不了。
+> `LiquidGlassView` 是一个 `FrameLayout` 子类：放进布局、把内容塞进去，就完事了。
+> API 24+，API 33+ 走 AGSL 快速路径。
+
 <p align="center">
-  <img src="assets\2983473432.jpg" alt="LiquidGlass Demo Screenshot" width="260">
-  <img src="assets\2323232323233.jpg" alt="LiquidGlass Demo Screenshot" width="260">
+  <img src="assets/hero-lens-detail.jpg" alt="边缘压缩环与色散彩边（1:1 像素）" width="820">
 </p>
 ### ✨ 特性
 
@@ -277,11 +318,23 @@ Inspired by the glassmorphism design trend and liquid-glass-react library.
 
 <div align="center">
 
-#### 🎬 Video Demo
-<img src="assets\mmexport1762090985763.gif" alt="LiquidGlass Demo Screenshot" width="260">
-<img src="assets\1762103926407.gif" alt="LiquidGlass Demo Screenshot" width="260">
+#### 🎬 实时拖动与参数调节
+
+<img src="assets/demo-glass-drag.gif" alt="在渐变背景上拖动玻璃" width="252">
+<img src="assets/demo-glass-params.gif" alt="实时调节透镜参数" width="252">
+
+#### 🧪 Regular / Clear 双材质
+
+<img src="assets/glass-regular-material.jpg" alt="Regular 材质——可读性优先" width="252">
+<img src="assets/glass-clear-material.jpg" alt="Clear 材质——高透" width="252">
 
 </div>
+
+跑 sample app 可以看到完整调参场（4 个场景 + 实时参数抽屉），或者直接启动首屏用的 hero 场景：
+
+```bash
+adb shell am start -n com.example.liquidglass/com.example.liquidglass.HeroShowcaseActivity
+```
 
 ### 📦 安装（JitPack）
 

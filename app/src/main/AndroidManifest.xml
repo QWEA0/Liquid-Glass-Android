@@ -33,6 +33,13 @@
             </intent-filter>
         </activity>
 
+        <!-- README 首屏素材录制用：iOS 壁纸 + 图标网格 + 液态玻璃药丸 -->
+        <activity
+            android:name="com.example.liquidglass.HeroShowcaseActivity"
+            android:exported="true"
+            android:label="LiquidGlass Hero"
+            android:screenOrientation="portrait" />
+
     </application>
 
 </manifest>
