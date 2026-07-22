@@ -788,6 +788,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     private fun syncGlassParams(target: LiquidGlassView) {
         val src = glassView
         target.useHardwareBlurWhenPossible = src.useHardwareBlurWhenPossible
+        target.debugApiLevelCap = src.debugApiLevelCap
         target.useShaderPipeline = src.useShaderPipeline
         target.material = src.material
         target.bevelWidth = src.bevelWidth
@@ -901,6 +902,23 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             cpuOptionsGroup.visibility = if (index == 2) View.VISIBLE else View.GONE
         }
         addNote(pathCard, getString(R.string.gpu_render_desc))
+
+        // 模拟 API 级别：钳制库的管线分层，在高版本设备上预览低版本效果
+        addLabel(pathCard, getString(R.string.simulate_api_label))
+        addSegmented(
+            pathCard,
+            listOf(getString(R.string.api_cap_device), "33–35", "31–32", "≤ 30"),
+            0
+        ) { index ->
+            val cap = when (index) {
+                1 -> 35
+                2 -> 32
+                3 -> 30
+                else -> Int.MAX_VALUE
+            }
+            applyGlass { it.debugApiLevelCap = cap }
+        }
+        addNote(pathCard, getString(R.string.simulate_api_desc))
 
         // Liquid Glass 2.0 透镜选项（仅透镜路径时显示）
         lensGroup = LinearLayout(this).apply {
@@ -1484,8 +1502,15 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 "(* = cache hit)"
         }
 
-        tvPerformanceOverlay.text = overlayText
-        tvDebugInfo.text = debugText
+        // 实际 / 生效 API（模拟低版本时显示箭头）
+        val apiLine = if (glassView.debugApiLevelCap != Int.MAX_VALUE) {
+            "API ${Build.VERSION.SDK_INT}→${glassView.effectiveApiLevel}(sim)"
+        } else {
+            "API ${Build.VERSION.SDK_INT}"
+        }
+
+        tvPerformanceOverlay.text = "$overlayText\n$apiLine"
+        tvDebugInfo.text = "$debugText\n$apiLine"
     }
 
     // ==================== 背景图片 ====================

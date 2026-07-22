@@ -252,6 +252,8 @@ pipeline; below API 33 they are accepted and silently ignored — no exception i
 | `enableAdaptiveTint` | Boolean | `false` | — | **33+** Tint adapts to backdrop luminance |
 | `useShaderPipeline` | Boolean | `true` | — | `false` forces the classic pipeline even on 33+ |
 | `useHardwareBlurWhenPossible` | Boolean | `true` | — | `false` also disables the lens pipeline, not just hardware blur |
+| `debugApiLevelCap` | Int | `MAX_VALUE` | API level | Debug only: clamp the pipeline tier to preview older devices (36 AGSL extras / 33 lens / 31 classic GPU / below = CPU) |
+| `effectiveApiLevel` | Int | — | read-only | `min(device SDK, debugApiLevelCap)` — the tier actually in use |
 | `blurAmount` | Float | `0.0625f` | 0–1 | Blur radius as a fraction of view size |
 | `saturation` | Float | `140f` | percent | 100 = unchanged |
 | `aberrationIntensity` | Float | `2f` | — | Classic RGB-separation strength |
@@ -629,6 +631,8 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 | `enableAdaptiveTint` | Boolean | `false` | — | **33+** 染色跟随背景亮度 |
 | `useShaderPipeline` | Boolean | `true` | — | 设 `false` 可在 33+ 上强制走经典管线 |
 | `useHardwareBlurWhenPossible` | Boolean | `true` | — | 设 `false` 会连透镜管线一起关掉，不只是硬件模糊 |
+| `debugApiLevelCap` | Int | `MAX_VALUE` | API 级别 | 仅调试：钳制管线分层，预览低版本效果（36 AGSL 增强 / 33 透镜 / 31 经典 GPU / 以下 CPU） |
+| `effectiveApiLevel` | Int | — | 只读 | `min(设备 SDK, debugApiLevelCap)`，即实际生效的分层级别 |
 | `blurAmount` | Float | `0.0625f` | 0–1 | 模糊半径（占视图尺寸比例） |
 | `saturation` | Float | `140f` | 百分比 | 100 = 不变 |
 | `aberrationIntensity` | Float | `2f` | — | 经典 RGB 分离强度 |

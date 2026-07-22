@@ -95,12 +95,16 @@ internal class HardwareBackdropBlur {
 
     private val renderNode = RenderNode("LiquidGlassBackdrop")
 
+    /** 调试用 API 级别钳制（见 LiquidGlassView.debugApiLevelCap；影响 vibrancy 选择） */
+    var debugApiLevelCap: Int = Int.MAX_VALUE
+
     // 仅参数变化时重建 RenderEffect
     private var lastBlurRadius = Float.NaN
     private var lastSaturation = Float.NaN
     private var lastAberration: AberrationParams? = null
     private var lastWidth = 0
     private var lastHeight = 0
+    private var lastApiCap = Int.MAX_VALUE
     private var effectBuilt = false
 
     private var aberrationShader: RuntimeShader? = null
@@ -142,7 +146,8 @@ internal class HardwareBackdropBlur {
             saturation != lastSaturation ||
             aberration != lastAberration ||
             width != lastWidth ||
-            height != lastHeight
+            height != lastHeight ||
+            debugApiLevelCap != lastApiCap
         ) {
             renderNode.setRenderEffect(buildEffect(blurRadius, saturation, aberration, width, height))
             lastBlurRadius = blurRadius
@@ -150,6 +155,7 @@ internal class HardwareBackdropBlur {
             lastAberration = aberration
             lastWidth = width
             lastHeight = height
+            lastApiCap = debugApiLevelCap
             effectBuilt = true
         }
 
@@ -232,7 +238,9 @@ internal class HardwareBackdropBlur {
      * uniform 在 createColorFilterEffect 时被快照，复用实例安全。
      */
     private fun saturationFilter(factor: Float): ColorFilter {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA &&
+            debugApiLevelCap >= Build.VERSION_CODES.BAKLAVA
+        ) {
             val vib = vibrancyFilter ?: GlassRuntimeEffects.createVibrancyFilter()?.also { vibrancyFilter = it }
             if (vib != null) {
                 vib.setFloatUniform("satFactor", factor)

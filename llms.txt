@@ -106,6 +106,9 @@ glass.enableDynamicBackground = true   // REQUIRED if the backdrop moves or the 
 - **API 36+ (Android 16) enables extra polish automatically** — nonlinear vibrancy
   saturation, single-pass rim highlight, per-pixel adaptive tint on the non-lens
   pipelines. No new properties, nothing to configure, silent fallback below 36.
+- **`debugApiLevelCap` (Int, debug only)** clamps the version-tiered pipeline selection
+  so a high-API device can preview lower tiers; `effectiveApiLevel` (read-only) is
+  `min(device SDK, cap)`. Do not set the cap in production code.
 - **Package name is `com.example.liquidglass`** for both the library classes and the
   Android manifest namespace. It is not `com.qwea0.*`.
 

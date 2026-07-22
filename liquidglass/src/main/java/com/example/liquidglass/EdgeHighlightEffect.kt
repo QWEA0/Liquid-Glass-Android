@@ -45,6 +45,8 @@ class EdgeHighlightEffect {
      * @param overLight 是否在亮背景上
      * @param borderWidth 边框宽度（像素）
      * @param opacity 高光不透明度（0-100）
+     * @param apiLevelCap 调试用 API 级别钳制（低于 36 时强制双 pass 回退，
+     *   见 LiquidGlassView.debugApiLevelCap）
      */
     fun draw(
         canvas: Canvas,
@@ -53,7 +55,8 @@ class EdgeHighlightEffect {
         mouseOffset: PointF = PointF(0f, 0f),
         overLight: Boolean = false,
         borderWidth: Float = 1.5f,
-        opacity: Float = 100f
+        opacity: Float = 100f,
+        apiLevelCap: Int = Int.MAX_VALUE
     ) {
         val normalizedOpacity = opacity / 100f
 
@@ -64,7 +67,9 @@ class EdgeHighlightEffect {
 
         // 2. API 36+ 硬件画布：单 pass 融合绘制（screen+overlay 合一，
         //    并按边框底下像素的实际亮度逐像素自适应），一半绘制开销
-        if (canvas.isHardwareAccelerated && GlassRuntimeEffects.isSupported) {
+        if (canvas.isHardwareAccelerated && GlassRuntimeEffects.isSupported &&
+            apiLevelCap >= Build.VERSION_CODES.BAKLAVA
+        ) {
             if (!rimBlenderTried) {
                 rimBlenderTried = true
                 rimBlender = GlassRuntimeEffects.createRimBlender()

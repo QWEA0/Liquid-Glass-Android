@@ -174,6 +174,9 @@
     <!-- Liquid Glass 2.0（透镜管线） -->
     <string name="scene_merge">融合</string>
     <string name="scene_home">桌面</string>
+    <string name="simulate_api_label">模拟 API 级别</string>
+    <string name="api_cap_device">跟随设备</string>
+    <string name="simulate_api_desc">把管线分层钳制到指定级别，预览低版本机型效果：36+ AGSL 颜色滤镜/混合增强 · 33–35 透镜 · 31–32 经典 GPU · ≤30 CPU。悬浮层显示 实际 → 生效 API。</string>
     <string name="render_lens">透镜 2.0</string>
     <string name="render_classic_gpu">经典 GPU</string>
     <string name="section_lens">Liquid Glass 2.0 · 透镜（API 33+）</string>

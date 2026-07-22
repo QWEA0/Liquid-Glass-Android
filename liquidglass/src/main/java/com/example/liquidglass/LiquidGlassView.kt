@@ -592,6 +592,34 @@ class LiquidGlassView @JvmOverloads constructor(
             }
         }
 
+    /**
+     * 调试用：把渲染管线的版本分层钳制到指定 API 级别，在高版本设备上
+     * 预览低版本机型的实际效果。
+     *
+     * 分层对照：36+ AGSL 颜色滤镜/混合模式增强 → 33+ 透镜管线 →
+     * 31+ 旧 GPU 模糊 → 以下 CPU 管线。只影响本库的路径选择，真实设备
+     * 能力不足的层不会因此解锁。<= 0 或 [Int.MAX_VALUE] = 不钳制（默认）。
+     * 仅调试观察用，不要在生产代码里设置。
+     */
+    var debugApiLevelCap: Int = Int.MAX_VALUE
+        set(value) {
+            val v = if (value <= 0) Int.MAX_VALUE else value
+            if (field != v) {
+                field = v
+                // 钳制变化可能切换管线/滤镜：清掉 vibrancy 状态并重建效果链
+                updateSaturationFilter()
+                if (!lensPathLikely()) ensureDisplacementMaps()
+                updateSensorRegistration()
+                blurDirty = true
+                aberrationDirty = true
+                invalidate()
+            }
+        }
+
+    /** 当前生效的 API 级别（真实 SDK 与 [debugApiLevelCap] 取小，只读） */
+    val effectiveApiLevel: Int
+        get() = minOf(Build.VERSION.SDK_INT, debugApiLevelCap)
+
     // 触摸交互状态
     private var touchX = 0f
     private var touchY = 0f
@@ -725,7 +753,9 @@ class LiquidGlassView @JvmOverloads constructor(
      */
     private fun applySaturationFilter(hardwareCanvas: Boolean) {
         if (saturation == 100f) return
-        if (!hardwareCanvas || Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA) {
+        if (!hardwareCanvas || Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA ||
+            debugApiLevelCap < Build.VERSION_CODES.BAKLAVA
+        ) {
             if (paintFilterIsVibrancy) updateSaturationFilter()
             return
         }
@@ -780,6 +810,7 @@ class LiquidGlassView @JvmOverloads constructor(
     private fun lensPathLikely(): Boolean =
         useShaderPipeline && useHardwareBlurWhenPossible &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            debugApiLevelCap >= Build.VERSION_CODES.TIRAMISU &&
             GlassLensRenderer.isSupported() && lensRenderer?.isAvailable != false
 
     private fun maybeGenerateDisplacementMaps() {
@@ -940,7 +971,8 @@ class LiquidGlassView @JvmOverloads constructor(
                 // （与透镜管线同一条曲线），否则回退全局染色覆盖层
                 var perPixelTinted = false
                 if (material.adaptiveTint && enableAdaptiveTint &&
-                    canvas.isHardwareAccelerated && GlassRuntimeEffects.isSupported
+                    canvas.isHardwareAccelerated && GlassRuntimeEffects.isSupported &&
+                    debugApiLevelCap >= Build.VERSION_CODES.BAKLAVA
                 ) {
                     if (!adaptiveTintBlenderTried) {
                         adaptiveTintBlenderTried = true
@@ -992,6 +1024,7 @@ class LiquidGlassView @JvmOverloads constructor(
     private fun tryDrawLensGlass(canvas: Canvas, blurRadius: Float): Boolean {
         if (!useShaderPipeline || !useHardwareBlurWhenPossible) return false
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
+        if (debugApiLevelCap < Build.VERSION_CODES.TIRAMISU) return false
         if (!GlassLensRenderer.isSupported()) return false
         if (!canvas.isHardwareAccelerated) return false
         if (customBackdropCapture != null) return false
@@ -1170,6 +1203,7 @@ class LiquidGlassView @JvmOverloads constructor(
         val want = isAttachedToWindow && enableSensorHighlight && useShaderPipeline &&
             useHardwareBlurWhenPossible &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            debugApiLevelCap >= Build.VERSION_CODES.TIRAMISU &&
             GlassLensRenderer.isSupported() &&
             !a11yReducedMotion && !a11yPowerSave
         if (want) {
@@ -1229,6 +1263,7 @@ class LiquidGlassView @JvmOverloads constructor(
     private fun tryDrawHardwareBlur(canvas: Canvas, blurRadius: Float): Boolean {
         if (!useHardwareBlurWhenPossible) return false
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
+        if (debugApiLevelCap < Build.VERSION_CODES.S) return false
         if (!canvas.isHardwareAccelerated) return false
         if (enableChromaticDispersion) return false
         if (customBackdropCapture != null) return false
@@ -1238,6 +1273,7 @@ class LiquidGlassView @JvmOverloads constructor(
         var aberrationParams: HardwareBackdropBlur.AberrationParams? = null
         if (wantsAberration) {
             if (!HardwareBackdropBlur.supportsRuntimeShader()) return false
+            if (debugApiLevelCap < Build.VERSION_CODES.TIRAMISU) return false
             // 位移贴图尚未生成时先回退 CPU（CPU 路径同样会跳过色差）
             val map = displacementMaps?.get(displacementMode) ?: return false
             val effectiveScale = if (overLight) displacementScale * 0.5f else displacementScale
@@ -1253,6 +1289,7 @@ class LiquidGlassView @JvmOverloads constructor(
         val startNs = if (collectFrameStats) System.nanoTime() else 0L
 
         val renderer = hardwareBlur ?: HardwareBackdropBlur().also { hardwareBlur = it }
+        renderer.debugApiLevelCap = debugApiLevelCap
         val effectiveRadius = if (enableBackdropBlur) blurRadius else 0f
         val ok = renderer.draw(canvas, this, effectiveRadius, saturation, clipPath, aberrationParams)
 
@@ -1290,7 +1327,8 @@ class LiquidGlassView @JvmOverloads constructor(
             mouseOffset = touchOffset,
             overLight = overLight,
             borderWidth = edgeHighlightBorderWidth,
-            opacity = edgeHighlightOpacity
+            opacity = edgeHighlightOpacity,
+            apiLevelCap = debugApiLevelCap
         )
     }
     
