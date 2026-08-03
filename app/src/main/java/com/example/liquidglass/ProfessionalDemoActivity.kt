@@ -22,6 +22,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
+import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RadialGradient
@@ -39,6 +40,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.view.animation.LinearInterpolator
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
@@ -65,6 +67,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         ANIMATED(R.string.scene_animated),
         MERGE(R.string.scene_merge),
         HOME(R.string.scene_home),
+        LIST(R.string.scene_list),
         SHOWCASE(R.string.scene_showcase)
     }
 
@@ -79,6 +82,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     private lateinit var fabSettings: FloatingActionButton
     private lateinit var tvPerformanceOverlay: TextView
     private lateinit var tvDebugInfo: TextView
+    private lateinit var sceneBarScroll: HorizontalScrollView
     private val sceneChips = mutableListOf<TextView>()
 
     // 动态显隐的面板分组
@@ -266,15 +270,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                bottomMargin = dp(28)
-            }
-            background = GradientDrawable().apply {
-                cornerRadius = dpF(22)
-                setColor(0xB3000000.toInt())
-            }
-            setPadding(dp(6), dp(6), dp(6), dp(6))
+            )
         }
 
         Scene.entries.forEach { scene ->
@@ -282,13 +278,48 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 text = getString(scene.labelRes)
                 textSize = 13f
                 gravity = Gravity.CENTER
-                setPadding(dp(16), dp(8), dp(16), dp(8))
+                // 一行放不下时必须单行截断：被挤窄的 chip 会逐字换行，
+                // 把整条 bar 撑成几倍高（黑底跟着变高就是这么来的）
+                maxLines = 1
+                setPadding(dp(13), dp(8), dp(13), dp(8))
                 setOnClickListener { if (currentScene != scene) showScene(scene) }
             }
             sceneChips += chip
             bar.addView(chip)
         }
-        return bar
+
+        // 场景数量超过一屏宽度后改为横向滚动，而不是把 chip 压扁。
+        // 胶囊底色和圆角裁剪都挂在滚动容器（视口）上，这样无论内容多宽，
+        // 看到的始终是一颗完整的、不出屏的胶囊，chip 在里面滚动
+        sceneBarScroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            // 两端渐隐提示还能往左右滚，而不是把文字硬切断
+            isHorizontalFadingEdgeEnabled = true
+            setFadingEdgeLength(dp(20))
+            background = GradientDrawable().apply {
+                cornerRadius = dpF(22)
+                setColor(0xB3000000.toInt())
+            }
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, dpF(22))
+                }
+            }
+            clipToOutline = true
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                bottomMargin = dp(28)
+                leftMargin = dp(12)
+                rightMargin = dp(12)
+            }
+            addView(bar)
+        }
+        return sceneBarScroll
     }
 
     private fun updateSceneBar() {
@@ -307,6 +338,14 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 chip.typeface = Typeface.DEFAULT
             }
         }
+
+        // 选中项滚进可视区（切场景时它可能在屏幕外）
+        val selected = sceneChips[Scene.entries.indexOf(currentScene)]
+        sceneBarScroll.post {
+            sceneBarScroll.smoothScrollTo(
+                selected.left - (sceneBarScroll.width - selected.width) / 2, 0
+            )
+        }
     }
 
     // ==================== 场景 ====================
@@ -322,6 +361,9 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         glassView.setOnTouchListener(null)
         glassView.translationX = 0f
         glassView.translationY = 0f
+        // LIST 场景会把背景来源指到场景内的列表上，切走时必须解绑，
+        // 否则其他场景的玻璃还在捕获一棵已经被移除的子树
+        glassView.backdropSource = null
 
         val root = when (scene) {
             Scene.SCROLL -> buildScrollScene()
@@ -329,6 +371,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             Scene.ANIMATED -> buildAnimatedScene()
             Scene.MERGE -> buildMergeScene()
             Scene.HOME -> buildHomeScene()
+            Scene.LIST -> buildListScene()
             Scene.SHOWCASE -> buildShowcaseScene()
         }
         sceneHost.addView(root)
@@ -360,6 +403,54 @@ class ProfessionalDemoActivity : AppCompatActivity() {
 
         glassView.layoutParams = centerGlassParams()
         root.addView(glassView)
+        return root
+    }
+
+    /**
+     * 场景 6：列表 —— 玻璃悬浮在滚动列表上，背景由 [LiquidGlassView.backdropSource] 指定。
+     *
+     * 和其他场景的关键区别：玻璃套在一层全透明的宿主容器里，和列表**没有父子关系**。
+     * 默认的"捕获直接父容器"在这里只会拍到透明，画面全黑；背景完全来自 backdropSource，
+     * 滚动时的重绘也由该 API 自动挂的滚动监听触发。
+     *
+     * 文字行提供高频边界，和桌面场景的图标网格一样适合观察折射与色散。
+     */
+    private fun buildListScene(): View {
+        val root = FrameLayout(this)
+
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(80), 0, dp(160))
+        }
+        repeat(24) { i ->
+            content.addView(TextView(this).apply {
+                text = "ROW $i  ▍▍▍  ROW $i  ▍▍▍"
+                textSize = 20f
+                setTextColor(if (i % 2 == 0) Color.WHITE else 0xFFFFE066.toInt())
+                setBackgroundColor(if (i % 2 == 0) 0xFF1B3A6B.toInt() else 0xFF0B1D3A.toInt())
+                setPadding(dp(16), dp(16), dp(16), dp(16))
+                maxLines = 1
+            })
+        }
+        val scroll = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            setBackgroundColor(COLOR_SCROLL_GUTTER)
+            addView(content)
+        }
+        root.addView(scroll, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        // 玻璃挂在独立的透明子树里：背景只能靠 backdropSource 拿到
+        val isolatedHost = FrameLayout(this)
+        glassView.layoutParams = centerGlassParams()
+        glassView.backdropSource = content
+        isolatedHost.addView(glassView)
+        root.addView(isolatedHost, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
         return root
     }
 
