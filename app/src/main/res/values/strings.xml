@@ -175,6 +175,9 @@
     <string name="scene_merge">Merge</string>
     <string name="scene_home">Home</string>
     <string name="scene_list">List</string>
+    <string name="scene_text">Text</string>
+    <string name="text_scene_hint">Type anything — it becomes glass</string>
+    <string name="text_scene_apply">Apply</string>
     <string name="simulate_api_label">Simulate API Level</string>
     <string name="api_cap_device">Device</string>
     <string name="simulate_api_desc">Clamps the pipeline tier to preview older devices: 36+ AGSL color filter/blend extras · 33–35 lens · 31–32 classic GPU · ≤30 CPU. The overlay shows real → effective API.</string>

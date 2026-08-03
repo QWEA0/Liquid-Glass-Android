@@ -41,6 +41,9 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.view.animation.LinearInterpolator
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
@@ -68,6 +71,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         MERGE(R.string.scene_merge),
         HOME(R.string.scene_home),
         LIST(R.string.scene_list),
+        TEXT(R.string.scene_text),
         SHOWCASE(R.string.scene_showcase)
     }
 
@@ -364,6 +368,8 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         // LIST 场景会把背景来源指到场景内的列表上，切走时必须解绑，
         // 否则其他场景的玻璃还在捕获一棵已经被移除的子树
         glassView.backdropSource = null
+        // TEXT 场景会改软键盘模式，切走时还原
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
 
         val root = when (scene) {
             Scene.SCROLL -> buildScrollScene()
@@ -372,6 +378,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             Scene.MERGE -> buildMergeScene()
             Scene.HOME -> buildHomeScene()
             Scene.LIST -> buildListScene()
+            Scene.TEXT -> buildTextScene()
             Scene.SHOWCASE -> buildShowcaseScene()
         }
         sceneHost.addView(root)
@@ -404,6 +411,285 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         glassView.layoutParams = centerGlassParams()
         root.addView(glassView)
         return root
+    }
+
+    /**
+     * 场景 7：玻璃文字（原型，尚未进库）—— 输入什么字，那几个字就是玻璃。
+     *
+     * 走的是 [GlassTextPrototypeView]：文字轮廓烘成距离场喂进透镜着色器，
+     * 于是折射/色散/高光落在笔画上，而不是一个矩形容器上。
+     * 背景用桌面壁纸 + 图标网格：折射在平滑渐变上根本看不出来。
+     */
+    private fun buildTextScene(): View {
+        val root = FrameLayout(this)
+        statsSource = null   // 本场景不含 LiquidGlassView，性能悬浮窗无数据源
+
+        // 键盘弹起时不要压缩布局，否则居中的玻璃字会被顶到 tab 栏后面
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+
+        // 背景：iOS 风格壁纸，纵向可滚动。第二张上下翻转，接缝处颜色连续
+        val backdrop = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            repeat(2) { i ->
+                addView(ImageView(this@ProfessionalDemoActivity).apply {
+                    setImageResource(R.drawable.text_backdrop)
+                    adjustViewBounds = true
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    if (i == 1) scaleY = -1f
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    )
+                })
+            }
+        }
+        root.addView(ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            setBackgroundColor(0xFF060B18.toInt())
+            addView(backdrop)
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        val glassText = GlassTextPrototypeView(this).apply {
+            textSizePx = dpF(125)
+            text = "Liquid"
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply { gravity = Gravity.CENTER }
+        }
+        root.addView(glassText)
+
+        // 输入不即时生效：连打连删会反复重烘距离场（一次数百毫秒），
+        // 改成点右侧按钮或按回车才提交
+        val input = EditText(this).apply {
+            setText(glassText.text)
+            hint = getString(R.string.text_scene_hint)
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            setHintTextColor(0x99FFFFFF.toInt())
+            background = GradientDrawable().apply {
+                cornerRadius = dpF(14)
+                setColor(0x59000000)
+                setStroke(dp(1), 0x40FFFFFF)
+            }
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            setSingleLine()
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            layoutParams = LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+            )
+        }
+        val applyText = {
+            glassText.text = input.text.toString()
+            input.clearFocus()
+            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
+                .hideSoftInputFromWindow(input.windowToken, 0)
+        }
+        val applyButton = TextView(this).apply {
+            text = getString(R.string.text_scene_apply)
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                cornerRadius = dpF(14)
+                setColor(COLOR_ACCENT)
+            }
+            setPadding(dp(18), dp(13), dp(18), dp(13))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { leftMargin = dp(8) }
+            setOnClickListener { applyText() }
+        }
+        input.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                applyText()
+                true
+            } else {
+                false
+            }
+        }
+        root.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(input)
+            addView(applyButton)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.TOP
+                topMargin = systemBarTop + dp(72)
+                leftMargin = dp(24)
+                rightMargin = dp(24)
+            }
+        })
+        root.addView(buildTextParamPanel(glassText))
+
+        // 场景里只有输入框可聚焦，进场景就会自动弹键盘把效果挡住；
+        // 让根容器先接住焦点，用户点了输入框才弹
+        root.isFocusableInTouchMode = true
+        root.requestFocus()
+
+        return root
+    }
+
+    /**
+     * 玻璃字调参面板
+     *
+     * 顶部那行等宽绿字是当前全部参数的汇总——调舒服了直接照着它报数即可。
+     * 字号/斜面/折射三项会触发距离场重烘，视图内部有 60ms 合并，拖滑杆不会每步都算。
+     */
+    private fun buildTextParamPanel(glass: GlassTextPrototypeView): View {
+        val density = resources.displayMetrics.density
+
+        val summary = TextView(this).apply {
+            textSize = 10f
+            typeface = Typeface.MONOSPACE
+            setTextColor(0xFF4CFF7A.toInt())
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        var tintDark = false
+        var tintAlpha = Color.alpha(glass.tint)
+
+        fun refreshSummary() {
+            summary.text = ("size=%.0fdp blur=%.0f bevel=%.2f refr=%.2f disp=%.2f\n" +
+                "spec=%.2f shadow=%.2f sat=%.0f tint=%s@%d").format(
+                glass.textSizePx / density,
+                glass.blurRadius, glass.bevelFactor, glass.refractFactor, glass.dispersion,
+                glass.specStrength, glass.innerShadow, glass.saturation,
+                if (tintDark) "#000" else "#fff", tintAlpha
+            )
+        }
+
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        panelSlider(body, "字号 dp", 24, 160, (glass.textSizePx / density).toInt(), { "$it" }) {
+            glass.textSizePx = dpF(it); refreshSummary()
+        }
+        panelSlider(body, "模糊 blur", 0, 60, glass.blurRadius.toInt(), { "$it" }) {
+            glass.blurRadius = it.toFloat(); refreshSummary()
+        }
+        panelSlider(body, "斜面 bevel ×em", 2, 30, (glass.bevelFactor * 100).toInt(), { "%.2f".format(it / 100f) }) {
+            glass.bevelFactor = it / 100f; refreshSummary()
+        }
+        panelSlider(body, "折射 refract ×em", 2, 70, (glass.refractFactor * 100).toInt(), { "%.2f".format(it / 100f) }) {
+            glass.refractFactor = it / 100f; refreshSummary()
+        }
+        panelSlider(body, "色散 dispersion", 0, 60, (glass.dispersion * 100).toInt(), { "%.2f".format(it / 100f) }) {
+            glass.dispersion = it / 100f; refreshSummary()
+        }
+        panelSlider(body, "高光 spec", 0, 400, (glass.specStrength * 100).toInt(), { "%.2f".format(it / 100f) }) {
+            glass.specStrength = it / 100f; refreshSummary()
+        }
+        panelSlider(body, "内阴影 shadow", 0, 250, (glass.innerShadow * 100).toInt(), { "%.2f".format(it / 100f) }) {
+            glass.innerShadow = it / 100f; refreshSummary()
+        }
+        panelSlider(body, "饱和度 sat", 50, 220, glass.saturation.toInt(), { "$it%" }) {
+            glass.saturation = it.toFloat(); refreshSummary()
+        }
+        panelSlider(body, "染色浓度 tint", 0, 120, tintAlpha, { "$it" }) {
+            tintAlpha = it
+            val c = if (tintDark) 0 else 255
+            glass.tint = Color.argb(tintAlpha, c, c, c)
+            refreshSummary()
+        }
+        body.addView(TextView(this).apply {
+            text = "染色明暗：亮（点击切换）"
+            textSize = 12f
+            setTextColor(0xFF4CA6FF.toInt())
+            setPadding(0, dp(10), 0, dp(6))
+            setOnClickListener {
+                tintDark = !tintDark
+                text = if (tintDark) "染色明暗：暗（点击切换）" else "染色明暗：亮（点击切换）"
+                val c = if (tintDark) 0 else 255
+                glass.tint = Color.argb(tintAlpha, c, c, c)
+                refreshSummary()
+            }
+        })
+
+        // 滑杆多，装进固定高度的滚动区，免得面板顶满整屏
+        val bodyScroll = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            addView(body)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(230)
+            )
+        }
+
+        val header = TextView(this).apply {
+            text = "▾ 文字样式参数"
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            setPadding(0, 0, 0, dp(2))
+            setOnClickListener {
+                val show = bodyScroll.visibility != View.VISIBLE
+                bodyScroll.visibility = if (show) View.VISIBLE else View.GONE
+                text = if (show) "▾ 文字样式参数" else "▸ 文字样式参数"
+            }
+        }
+
+        refreshSummary()
+
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                cornerRadius = dpF(16)
+                setColor(0xE60E0E12.toInt())
+            }
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            addView(header)
+            addView(summary)
+            addView(bodyScroll)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.BOTTOM
+                leftMargin = dp(12)
+                rightMargin = dp(12)
+                // 让开底部的场景切换条，并且高过设置 FAB——否则 FAB 会压住汇总行右端
+                bottomMargin = dp(152)
+            }
+        }
+    }
+
+    /** 面板里的深色滑杆：标签自带当前值 */
+    private fun panelSlider(
+        parent: LinearLayout,
+        label: String,
+        min: Int,
+        max: Int,
+        initial: Int,
+        display: (Int) -> String,
+        onChange: (Int) -> Unit
+    ) {
+        val clamped = initial.coerceIn(min, max)
+        val tv = TextView(this).apply {
+            textSize = 12f
+            setTextColor(0xFFDDDDDD.toInt())
+            text = "$label   ${display(clamped)}"
+            setPadding(0, dp(6), 0, 0)
+        }
+        val seek = SeekBar(this).apply {
+            this.max = max - min
+            progress = clamped - min
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
+                    val v = p + min
+                    tv.text = "$label   ${display(v)}"
+                    if (fromUser) onChange(v)
+                }
+                override fun onStartTrackingTouch(sb: SeekBar?) = Unit
+                override fun onStopTrackingTouch(sb: SeekBar?) = Unit
+            })
+        }
+        parent.addView(tv)
+        parent.addView(seek)
     }
 
     /**
