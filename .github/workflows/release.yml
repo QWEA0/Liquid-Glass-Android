@@ -1,17 +1,18 @@
 name: Release
 
 # 推送 v* 标签即自动构建签名 demo APK 并发布 Release。
-# 也可在 Actions 页手动触发（workflow_dispatch）做一次演练。
+# 手动触发（workflow_dispatch）只构建、不发布，产物挂成 artifact 供核对。
+#
+# 需要 4 个仓库 Secret：KEYSTORE_BASE64（.jks 的 base64）、KEYSTORE_PASSWORD、
+# KEY_ALIAS、KEY_PASSWORD，缺失时构建会在还原密钥这一步直接失败。
+#
+# 注意：tag 触发用的是被打 tag 那个 commit 里的 workflow 文件，
+# 给早于本文件的旧 commit 打 tag 不会触发任何运行。
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      tag:
-        description: '要发布的标签（留空则只构建、不发布）'
-        required: false
-        type: string
 
 permissions:
   contents: write        # 创建 Release 需要写权限
