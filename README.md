@@ -272,6 +272,7 @@ pipeline; below API 33 they are accepted and silently ignored — no exception i
 | `highQualityBlur` | Boolean | `false` | — | |
 | `collectFrameStats` | Boolean | `true` | — | Profiling aid; turn off in production |
 | `glassAppearanceListener` | `((Boolean) -> Unit)?` | `null` | — | Fires when backdrop luminance flips light/dark |
+| `backdropSource` | `View?` | `null` | — | Backdrop to capture. `null` = the direct parent. Set it to read a view anywhere in the tree — keeps the GPU pipeline |
 
 #### XML attributes
 
@@ -279,7 +280,8 @@ Declared under the `LiquidGlassView` styleable, namespace `app`:
 
 `displacementScale` · `blurAmount` · `saturation` · `aberrationIntensity` · `elasticity` ·
 `cornerRadius` (dimension) · `glassMaterial` (`regular` | `clear`) · `bevelWidth` (dimension) ·
-`refractionHeight` (dimension) · `dispersionStrength` · `sensorHighlight` · `adaptiveTint`
+`refractionHeight` (dimension) · `dispersionStrength` · `sensorHighlight` · `adaptiveTint` ·
+`backdropSourceId` (reference — id of the backdrop view; omit for the direct parent)
 
 #### Enum values
 
@@ -298,7 +300,8 @@ Exact spelling — invented constants are the usual cause of a failed build.
 |---|---|
 | `setPrimaryShape(rect: RectF?, cornerRadiusPx: Float = cornerRadius)` | `null` = use the whole view |
 | `setSecondaryShape(rect: RectF?, cornerRadiusPx: Float = 999f, smoothing: Float = 48f)` | **33+** Two shapes blend with smooth-min, like mercury |
-| `setCustomBackdropCapture(capture: (RectF) -> Bitmap?)` | Supply your own backdrop source |
+| `setBackdropSource(source: View?)` | Capture any view instead of the direct parent — free of the hierarchy, **keeps the GPU pipeline** |
+| `setCustomBackdropCapture(capture: (RectF) -> Bitmap?)` | Supply your own backdrop bitmap. Forces the CPU pipeline — prefer `setBackdropSource` |
 | `refreshAccessibilityState()` | Re-read system accessibility settings |
 
 `ScrollEdgeBlurView` — progressive scroll-edge blur: `edge`, `maxBlurRadius`,
@@ -316,6 +319,15 @@ See [docs/LIQUID_GLASS_V2.md](docs/LIQUID_GLASS_V2.md) for the full lens-pipelin
 Add the JitPack repo and the `:liquidglass` dependency, then put a
 `com.example.liquidglass.LiquidGlassView` in your layout over some background content and
 set `enableDynamicBackground = true`. Full snippet in [Quick Start](#-quick-start).
+
+**How do I put glass over a `ScrollView` / `RecyclerView`?**
+The glass captures its **direct parent**, so the scrolling content must be in that parent —
+put the `ScrollView` and the glass in one `FrameLayout`, glass declared last, and set
+`enableDynamicBackground = true` so it keeps up with the scroll. If they can't share a parent,
+set `backdropSource` to the scrolling view instead: the glass then reads that view from
+anywhere in the tree, the overlap is computed from screen coordinates, and scrolling it
+repaints the glass automatically. Note that glass inside a `ScrollView` scrolling *with* the
+content sees a fixed backdrop by definition — that's physically correct, not a bug.
 
 **Can I use this from Jetpack Compose?**
 You can via `AndroidView`, but you shouldn't. Use
@@ -651,6 +663,7 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 | `highQualityBlur` | Boolean | `false` | — | |
 | `collectFrameStats` | Boolean | `true` | — | 性能分析用，生产环境关掉 |
 | `glassAppearanceListener` | `((Boolean) -> Unit)?` | `null` | — | 背景明暗翻转时回调 |
+| `backdropSource` | `View?` | `null` | — | 背景来源视图。`null` = 直接父容器；指定后可捕获树中任意位置的视图，且保留 GPU 管线 |
 
 #### XML 属性
 
@@ -658,7 +671,8 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 
 `displacementScale` · `blurAmount` · `saturation` · `aberrationIntensity` · `elasticity` ·
 `cornerRadius`（dimension） · `glassMaterial`（`regular` | `clear`） · `bevelWidth`（dimension） ·
-`refractionHeight`（dimension） · `dispersionStrength` · `sensorHighlight` · `adaptiveTint`
+`refractionHeight`（dimension） · `dispersionStrength` · `sensorHighlight` · `adaptiveTint` ·
+`backdropSourceId`（reference —— 背景来源视图的 id，不填 = 直接父容器）
 
 #### 枚举值
 
@@ -677,7 +691,8 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 |---|---|
 | `setPrimaryShape(rect: RectF?, cornerRadiusPx: Float = cornerRadius)` | 传 `null` = 使用整个视图 |
 | `setSecondaryShape(rect: RectF?, cornerRadiusPx: Float = 999f, smoothing: Float = 48f)` | **33+** 双形状 smin 黏连合并 |
-| `setCustomBackdropCapture(capture: (RectF) -> Bitmap?)` | 自定义背景来源 |
+| `setBackdropSource(source: View?)` | 捕获指定视图而非直接父容器，摆脱层级约束，**保留 GPU 管线** |
+| `setCustomBackdropCapture(capture: (RectF) -> Bitmap?)` | 自己提供背景位图。会强制回退 CPU 管线，优先用 `setBackdropSource` |
 | `refreshAccessibilityState()` | 重新读取系统无障碍设置 |
 
 `ScrollEdgeBlurView` —— 滚动边缘渐进模糊：`edge`、`maxBlurRadius`、`bindScrollView(view)`。
@@ -690,6 +705,13 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 加上 JitPack 仓库和 `:liquidglass` 依赖，在布局里把
 `com.example.liquidglass.LiquidGlassView` 放在某个背景内容之上，然后设
 `enableDynamicBackground = true`。完整代码见[快速开始](#-快速开始)。
+
+**怎么在 `ScrollView` / `RecyclerView` 上面加玻璃？**
+玻璃捕获的是**直接父容器**，所以滚动内容必须在这个父容器里：把 `ScrollView` 和玻璃放进
+同一个 `FrameLayout`、玻璃写在后面，再设 `enableDynamicBackground = true` 让它跟上滚动。
+如果两者没法放在同一个父容器里，就把 `backdropSource` 指向那个滚动视图——玻璃可以待在树的
+任意位置，覆盖区域按屏幕坐标实时算，滚动时自动重绘。另外，玻璃如果是**跟着内容一起滚动**的，
+它看到的背景本来就不变，这是物理正确的结果，不是 bug。
 
 **能在 Jetpack Compose 里用吗？**
 用 `AndroidView` 包一层技术上可行，但不建议。请改用

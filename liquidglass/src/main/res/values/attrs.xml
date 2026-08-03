@@ -21,6 +21,8 @@
         <attr name="aberrationIntensity" format="float" />
         <attr name="elasticity" format="float" />
         <attr name="cornerRadius" format="dimension" />
+        <!-- 背景来源视图 id（不填 = 直接父容器） -->
+        <attr name="backdropSourceId" format="reference" />
 
         <!-- Liquid Glass 2.0（API 33+ 透镜管线） -->
         <attr name="glassMaterial" format="enum">

@@ -269,7 +269,8 @@ internal class GlassLensRenderer {
     ): Boolean {
         if (shaderBroken) return false
         if (!canvas.isHardwareAccelerated) return false
-        val parent = glassView.parent as? View ?: return false
+        // 背景来源：默认直接父容器，setBackdropSource 后为指定视图（可跨层级）
+        val parent = glassView.backdropView ?: return false
         val width = glassView.width
         val height = glassView.height
         if (width <= 0 || height <= 0) return false
@@ -297,9 +298,10 @@ internal class GlassLensRenderer {
             lastMargin = margin
         }
 
-        // 计算相对父视图的偏移（窗口坐标差，兼容滚动容器）
-        glassView.getLocationInWindow(location)
-        parent.getLocationInWindow(parentLocation)
+        // 计算相对背景视图的偏移（屏幕坐标差：兼容滚动容器，且背景视图在
+        // 另一个 window（Dialog/PopupWindow）时也成立）
+        glassView.getLocationOnScreen(location)
+        parent.getLocationOnScreen(parentLocation)
         val offsetX = (location[0] - parentLocation[0]).toFloat()
         val offsetY = (location[1] - parentLocation[1]).toFloat()
 

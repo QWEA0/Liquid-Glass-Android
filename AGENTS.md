@@ -33,6 +33,10 @@ Follow in order. Steps 1 and 4 are the ones most often missed.
    Keep the `:liquidglass` module suffix.
 3. **Put something behind the glass.** `LiquidGlassView` samples its parent's backdrop.
    In a `FrameLayout`, declare the background content first and the glass after it.
+   If the backdrop cannot be a sibling — the glass floats over a `RecyclerView` in another
+   subtree, or the wallpaper lives outside the `ScrollView` — set `backdropSource` to that
+   view instead (`app:backdropSourceId` in XML). It keeps the GPU pipeline;
+   `setCustomBackdropCapture` does not.
 4. **Set `enableDynamicBackground = true`** whenever the backdrop scrolls/animates or the
    glass itself moves. It defaults to `false`, and the symptom of forgetting it is a glass
    that looks frozen or empty — not an error.

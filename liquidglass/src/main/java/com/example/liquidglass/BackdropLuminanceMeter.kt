@@ -99,7 +99,8 @@ internal class BackdropLuminanceMeter(
      * GPU 管线的采样路径：把父视图缩绘到 24×24 位图上估算亮度
      */
     private fun sampleFromParent() {
-        val parent = view.parent as? View ?: return
+        // 与捕获路径取同一个背景来源，否则指定 backdropSource 后染色会读错内容
+        val parent = view.backdropView ?: return
         val w = view.width
         val h = view.height
         if (w <= 0 || h <= 0) return
@@ -110,8 +111,8 @@ internal class BackdropLuminanceMeter(
 
         try {
             val canvas = Canvas(bmp)
-            view.getLocationInWindow(location)
-            parent.getLocationInWindow(parentLocation)
+            view.getLocationOnScreen(location)
+            parent.getLocationOnScreen(parentLocation)
             val offsetX = (location[0] - parentLocation[0]).toFloat()
             val offsetY = (location[1] - parentLocation[1]).toFloat()
 

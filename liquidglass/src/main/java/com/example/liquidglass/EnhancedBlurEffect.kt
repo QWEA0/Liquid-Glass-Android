@@ -95,7 +95,10 @@ class EnhancedBlurEffect(
      * @return 背景 Bitmap（尺寸为 bounds * downsample）
      */
     fun captureBackdrop(bounds: RectF, downsample: Float = 1f): Bitmap? {
-        val parent = view.parent as? View ?: return null
+        // 背景来源：默认直接父容器，setBackdropSource 后为指定视图（可跨层级）
+        val parent = (view as? LiquidGlassView)?.backdropView
+            ?: view.parent as? View
+            ?: return null
 
         // ✅ 优化捕获范围：根据是否启用优化捕获来决定捕获区域
         val captureBounds = if (enableOptimizedCapture && cornerRadius > 0) {
@@ -113,11 +116,11 @@ class EnhancedBlurEffect(
         val canvas = Canvas(backdrop)
 
         try {
-            // 获取视图在父容器中的实际位置
+            // 获取视图相对背景视图的实际位置（屏幕坐标差，兼容跨层级/跨 window）
             val location = IntArray(2)
-            view.getLocationInWindow(location)
+            view.getLocationOnScreen(location)
             val parentLocation = IntArray(2)
-            parent.getLocationInWindow(parentLocation)
+            parent.getLocationOnScreen(parentLocation)
 
             // 计算视图相对于父容器的偏移
             val offsetX = (location[0] - parentLocation[0]).toFloat()

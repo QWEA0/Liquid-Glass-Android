@@ -34,6 +34,7 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import kotlin.math.*
@@ -492,6 +493,83 @@ class LiquidGlassView @JvmOverloads constructor(
     // 自定义背景捕获器
     private var customBackdropCapture: ((RectF) -> Bitmap?)? = null
 
+    // ==================== 背景来源（脱离层级约束） ====================
+
+    /**
+     * 指定背景来源视图（null = 直接父容器，默认行为）
+     *
+     * 玻璃默认捕获它的直接父容器，因此背景内容必须和玻璃在同一个父容器里。
+     * 指定 [backdropSource] 后改为捕获这个视图的绘制内容，玻璃可以放在
+     * 视图树的任意位置——覆盖区域由两者的屏幕坐标差实时计算。
+     *
+     * 与 [setCustomBackdropCapture] 的区别：这条路**保留 GPU 管线**
+     * （API 31+ RenderEffect / API 33+ AGSL 透镜），自定义捕获则会强制回退 CPU。
+     *
+     * ```kotlin
+     * // 玻璃浮在 RecyclerView 上方，两者不在同一父容器里也能取到背景
+     * glass.backdropSource = recyclerView
+     * ```
+     *
+     * 注意：
+     * - source 不能是玻璃自身或它的后代（会造成录制重入），传入时被忽略并打日志
+     * - 玻璃超出 source 边界的部分捕获为透明，需要自行保证覆盖关系
+     * - source 所在的树滚动时会自动触发重绘（见 [backdropScrollListener]）；
+     *   内容以其它方式变化（动画等）需要自行 [invalidate] 或开 [enableDynamicBackground]
+     */
+    var backdropSource: View? = null
+        set(value) {
+            if (field === value) return
+            if (value != null && !isValidBackdropSource(value)) {
+                Log.w(TAG, "backdropSource 不能是玻璃自身或其后代，已忽略")
+                return
+            }
+            unregisterBackdropScrollListener()
+            field = value
+            pendingBackdropSourceId = 0
+            if (isAttachedToWindow) registerBackdropScrollListener()
+            invalidate()
+        }
+
+    /** XML 里 app:backdropSourceId 指定的 id，在挂载后从根视图解析 */
+    private var pendingBackdropSourceId = 0
+
+    /** source 所在的树滚动时重绘玻璃（背景内容变了，折射结果必须跟着变） */
+    private val backdropScrollListener = ViewTreeObserver.OnScrollChangedListener { invalidate() }
+    private var registeredBackdropObserver: ViewTreeObserver? = null
+
+    /**
+     * 实际捕获的背景视图：未指定 [backdropSource] 时退回直接父容器
+     */
+    internal val backdropView: View?
+        get() = backdropSource ?: parent as? View
+
+    /** source 是玻璃自身或其后代时，捕获会对正在录制的 RenderNode 重入 */
+    private fun isValidBackdropSource(source: View): Boolean {
+        if (source === this) return false
+        var p = source.parent
+        while (p != null) {
+            if (p === this) return false
+            p = p.parent
+        }
+        return true
+    }
+
+    private fun registerBackdropScrollListener() {
+        val source = backdropSource ?: return
+        if (registeredBackdropObserver != null) return
+        if (!source.isAttachedToWindow) return
+        val observer = source.viewTreeObserver
+        if (!observer.isAlive) return
+        observer.addOnScrollChangedListener(backdropScrollListener)
+        registeredBackdropObserver = observer
+    }
+
+    private fun unregisterBackdropScrollListener() {
+        val observer = registeredBackdropObserver ?: return
+        if (observer.isAlive) observer.removeOnScrollChangedListener(backdropScrollListener)
+        registeredBackdropObserver = null
+    }
+
     // 位移贴图缓存（跨 detach 保留，仅尺寸变化时重建；透镜管线不需要）
     private var displacementMaps: Map<DisplacementMode, Bitmap>? = null
     private var mapGenerationId = 0  // 异步生成版本号，防止过期结果覆盖
@@ -692,6 +770,8 @@ class LiquidGlassView @JvmOverloads constructor(
             } else {
                 GlassMaterial.REGULAR
             }
+            // 背景来源只能记下 id：此时目标视图还没 inflate 完，挂载后再从根视图解析
+            pendingBackdropSourceId = ta.getResourceId(R.styleable.LiquidGlassView_backdropSourceId, 0)
         } finally {
             ta.recycle()
         }
@@ -1773,6 +1853,15 @@ class LiquidGlassView @JvmOverloads constructor(
         // 查询无障碍/省电状态（内部会按需注册传感器光源、启动亮度采样）
         refreshAccessibilityState()
 
+        // XML 指定的背景来源：整棵树 inflate 完才能按 id 找到，放到挂载时解析
+        if (backdropSource == null && pendingBackdropSourceId != 0) {
+            val id = pendingBackdropSourceId
+            rootView?.findViewById<View>(id)?.let { backdropSource = it }
+                ?: Log.w(TAG, "backdropSourceId 未在视图树中找到，回退直接父容器")
+            pendingBackdropSourceId = 0
+        }
+        registerBackdropScrollListener()
+
         // 重新挂载后所有缓存已被清空，标记脏并重启重绘
         lastBackdropHash = 0
         blurDirty = true
@@ -1798,6 +1887,9 @@ class LiquidGlassView @JvmOverloads constructor(
         // 注销传感器光源与亮度采样
         LightSourceController.unregister(this)
         luminanceMeter?.stop()
+
+        // 解绑背景来源的滚动监听（backdropSource 引用保留，重新挂载后自动恢复）
+        unregisterBackdropScrollListener()
 
         // 清理透镜渲染器
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

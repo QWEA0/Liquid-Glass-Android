@@ -129,7 +129,15 @@ Wrong enum constants are the usual cause of a failed build. These are the only v
   — two shapes blend with a smooth-min, producing the mercury-like merge. API 33+.
 - `LiquidGlassView.glassAppearanceListener: ((isOverLight: Boolean) -> Unit)?` — fires when
   the backdrop luminance flips; use it to switch your foreground text between light and dark.
-- `LiquidGlassView.setCustomBackdropCapture(capture: (RectF) -> Bitmap?)`
+- `LiquidGlassView.backdropSource: View?` — which view to capture as the backdrop. `null`
+  (default) = the direct parent, so the backdrop must be a sibling. Set it to any view in the
+  tree (a RecyclerView the glass floats over, a wallpaper outside the ScrollView) and the
+  overlap is computed from screen coordinates. Keeps the GPU pipeline; scroll in the source
+  tree auto-invalidates the glass. XML: `app:backdropSourceId="@id/…"`. The source must not be
+  the glass itself or one of its descendants.
+- `LiquidGlassView.setCustomBackdropCapture(capture: (RectF) -> Bitmap?)` — supply the backdrop
+  bitmap yourself. Forces the CPU pipeline (disables the API 31+/33+ GPU paths); prefer
+  `backdropSource` unless the backdrop is not a View at all.
 - `LiquidGlassView.frameStatsListener` / `FrameStats` — per-frame render timings.
 - `ScrollEdgeBlurView` — progressive scroll-edge blur. `edge`, `maxBlurRadius`,
   `bindScrollView(view)`.
