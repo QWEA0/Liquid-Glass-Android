@@ -132,7 +132,7 @@ Add the dependency:
 
 ```kotlin
 dependencies {
-    implementation("com.github.QWEA0.Liquid-Glass-Android:liquidglass:v2.0.0")
+    implementation("com.github.QWEA0.Liquid-Glass-Android:liquidglass:v2.0.1")
 }
 ```
 
@@ -524,7 +524,7 @@ dependencyResolutionManagement {
 
 ```kotlin
 dependencies {
-    implementation("com.github.QWEA0.Liquid-Glass-Android:liquidglass:v2.0.0")
+    implementation("com.github.QWEA0.Liquid-Glass-Android:liquidglass:v2.0.1")
 }
 ```
 

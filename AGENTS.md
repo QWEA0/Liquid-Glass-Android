@@ -29,7 +29,7 @@ Follow in order. Steps 1 and 4 are the ones most often missed.
 1. **Add the JitPack repository** to `settings.gradle.kts` under
    `dependencyResolutionManagement { repositories { … } }`. The dependency will not resolve
    from Maven Central.
-2. **Add the dependency** — `implementation("com.github.QWEA0.Liquid-Glass-Android:liquidglass:v2.0.0")`.
+2. **Add the dependency** — `implementation("com.github.QWEA0.Liquid-Glass-Android:liquidglass:v2.0.1")`.
    Keep the `:liquidglass` module suffix.
 3. **Put something behind the glass.** `LiquidGlassView` samples its parent's backdrop.
    In a `FrameLayout`, declare the background content first and the glass after it.
