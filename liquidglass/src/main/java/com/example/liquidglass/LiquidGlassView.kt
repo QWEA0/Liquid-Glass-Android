@@ -611,7 +611,9 @@ class LiquidGlassView @JvmOverloads constructor(
      * @param effectMs 色差/色散耗时（缓存命中时为 0）
      * @param finalizeMs 收尾耗时
      * @param totalMs 管线总耗时
-     * @param effectName 当前生效的效果（"GPU模糊"/"色散"/"色差"/"无"）
+     * @param effectName 当前生效的效果，取值为与语言无关的英文标识：
+     *                   "GPU Lens" / "GPU Blur" / "GPU Blur+CA" / "Dispersion" / "Aberration" / "None"。
+     *                   库不带本地化资源，这里返回中文会直接漏进调用方的 UI
      * @param blurRecomputed 本帧是否重算了模糊（false = 缓存命中）
      * @param effectRecomputed 本帧是否重算了色差/色散
      * @param processedWidth 实际处理的图像宽度（下采样后）
@@ -1204,7 +1206,7 @@ class LiquidGlassView @JvmOverloads constructor(
                 effectMs = 0f,
                 finalizeMs = 0f,
                 totalMs = totalMs,
-                effectName = "GPU透镜",
+                effectName = "GPU Lens",
                 blurRecomputed = false,
                 effectRecomputed = false,
                 processedWidth = width,
@@ -1382,7 +1384,7 @@ class LiquidGlassView @JvmOverloads constructor(
                 effectMs = 0f,
                 finalizeMs = 0f,
                 totalMs = totalMs,
-                effectName = if (aberrationParams != null) "GPU模糊+色差" else "GPU模糊",
+                effectName = if (aberrationParams != null) "GPU Blur+CA" else "GPU Blur",
                 blurRecomputed = false,
                 effectRecomputed = false,
                 processedWidth = width,
@@ -1606,9 +1608,9 @@ class LiquidGlassView @JvmOverloads constructor(
             val totalTime = (t5 - t1) / 1_000_000f
 
             val effectName = when {
-                enableChromaticDispersion -> "色散"
-                enableChromaticAberration -> "色差"
-                else -> "无"
+                enableChromaticDispersion -> "Dispersion"
+                enableChromaticAberration -> "Aberration"
+                else -> "None"
             }
 
             // ✅ 结构化统计（供性能监控 UI 直接读取，替代解析 logcat）

@@ -178,6 +178,7 @@
     <string name="scene_text">Text</string>
     <string name="text_scene_hint">Type anything — it becomes glass</string>
     <string name="text_scene_apply">Apply</string>
+    <string name="text_scene_default">Liquid</string>
     <string name="simulate_api_label">Simulate API Level</string>
     <string name="api_cap_device">Device</string>
     <string name="simulate_api_desc">Clamps the pipeline tier to preview older devices: 36+ AGSL color filter/blend extras · 33–35 lens · 31–32 classic GPU · ≤30 CPU. The overlay shows real → effective API.</string>
@@ -195,4 +196,19 @@
     <string name="lens_dispersion">Dispersion: %.2f</string>
     <string name="switch_a11y_opaque">Accessibility Opaque Fallback</string>
     <string name="merge_hint">Drag the bubble near the capsule — edges merge like liquid</string>
+    <string name="text_param_title">Text Style</string>
+    <string name="param_size">Size dp</string>
+    <string name="param_blur">Blur</string>
+    <string name="param_bevel">Bevel ×em</string>
+    <string name="param_refract">Refraction ×em</string>
+    <string name="param_dispersion">Dispersion</string>
+    <string name="param_spec">Specular</string>
+    <string name="param_shadow">Inner shadow</string>
+    <string name="param_saturation">Saturation</string>
+    <string name="param_tint">Tint alpha</string>
+    <string name="param_tint_light">Tint: light (tap to toggle)</string>
+    <string name="param_tint_dark">Tint: dark (tap to toggle)</string>
+    <string name="showcase_navbar">🧭  Liquid NavBar</string>
+    <string name="showcase_card">💳  Glass Card\nBlur · Aberration · Highlight</string>
 </resources>
+

@@ -454,7 +454,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
 
         val glassText = GlassTextPrototypeView(this).apply {
             textSizePx = dpF(125)
-            text = "Liquid"
+            text = getString(R.string.text_scene_default)
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
@@ -567,44 +567,44 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         }
 
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        panelSlider(body, "字号 dp", 24, 160, (glass.textSizePx / density).toInt(), { "$it" }) {
+        panelSlider(body, getString(R.string.param_size), 24, 160, (glass.textSizePx / density).toInt(), { "$it" }) {
             glass.textSizePx = dpF(it); refreshSummary()
         }
-        panelSlider(body, "模糊 blur", 0, 60, glass.blurRadius.toInt(), { "$it" }) {
+        panelSlider(body, getString(R.string.param_blur), 0, 60, glass.blurRadius.toInt(), { "$it" }) {
             glass.blurRadius = it.toFloat(); refreshSummary()
         }
-        panelSlider(body, "斜面 bevel ×em", 2, 30, (glass.bevelFactor * 100).toInt(), { "%.2f".format(it / 100f) }) {
+        panelSlider(body, getString(R.string.param_bevel), 2, 30, (glass.bevelFactor * 100).toInt(), { "%.2f".format(it / 100f) }) {
             glass.bevelFactor = it / 100f; refreshSummary()
         }
-        panelSlider(body, "折射 refract ×em", 2, 70, (glass.refractFactor * 100).toInt(), { "%.2f".format(it / 100f) }) {
+        panelSlider(body, getString(R.string.param_refract), 2, 70, (glass.refractFactor * 100).toInt(), { "%.2f".format(it / 100f) }) {
             glass.refractFactor = it / 100f; refreshSummary()
         }
-        panelSlider(body, "色散 dispersion", 0, 60, (glass.dispersion * 100).toInt(), { "%.2f".format(it / 100f) }) {
+        panelSlider(body, getString(R.string.param_dispersion), 0, 60, (glass.dispersion * 100).toInt(), { "%.2f".format(it / 100f) }) {
             glass.dispersion = it / 100f; refreshSummary()
         }
-        panelSlider(body, "高光 spec", 0, 400, (glass.specStrength * 100).toInt(), { "%.2f".format(it / 100f) }) {
+        panelSlider(body, getString(R.string.param_spec), 0, 400, (glass.specStrength * 100).toInt(), { "%.2f".format(it / 100f) }) {
             glass.specStrength = it / 100f; refreshSummary()
         }
-        panelSlider(body, "内阴影 shadow", 0, 250, (glass.innerShadow * 100).toInt(), { "%.2f".format(it / 100f) }) {
+        panelSlider(body, getString(R.string.param_shadow), 0, 250, (glass.innerShadow * 100).toInt(), { "%.2f".format(it / 100f) }) {
             glass.innerShadow = it / 100f; refreshSummary()
         }
-        panelSlider(body, "饱和度 sat", 50, 220, glass.saturation.toInt(), { "$it%" }) {
+        panelSlider(body, getString(R.string.param_saturation), 50, 220, glass.saturation.toInt(), { "$it%" }) {
             glass.saturation = it.toFloat(); refreshSummary()
         }
-        panelSlider(body, "染色浓度 tint", 0, 120, tintAlpha, { "$it" }) {
+        panelSlider(body, getString(R.string.param_tint), 0, 120, tintAlpha, { "$it" }) {
             tintAlpha = it
             val c = if (tintDark) 0 else 255
             glass.tint = Color.argb(tintAlpha, c, c, c)
             refreshSummary()
         }
         body.addView(TextView(this).apply {
-            text = "染色明暗：亮（点击切换）"
+            text = getString(R.string.param_tint_light)
             textSize = 12f
             setTextColor(0xFF4CA6FF.toInt())
             setPadding(0, dp(10), 0, dp(6))
             setOnClickListener {
                 tintDark = !tintDark
-                text = if (tintDark) "染色明暗：暗（点击切换）" else "染色明暗：亮（点击切换）"
+                text = getString(if (tintDark) R.string.param_tint_dark else R.string.param_tint_light)
                 val c = if (tintDark) 0 else 255
                 glass.tint = Color.argb(tintAlpha, c, c, c)
                 refreshSummary()
@@ -621,7 +621,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         }
 
         val header = TextView(this).apply {
-            text = "▾ 文字样式参数"
+            text = "▾ " + getString(R.string.text_param_title)
             textSize = 13f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
@@ -629,7 +629,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             setOnClickListener {
                 val show = bodyScroll.visibility != View.VISIBLE
                 bodyScroll.visibility = if (show) View.VISIBLE else View.GONE
-                text = if (show) "▾ 文字样式参数" else "▸ 文字样式参数"
+                text = (if (show) "▾ " else "▸ ") + getString(R.string.text_param_title)
             }
         }
 
@@ -1089,7 +1089,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 setMargins(dp(16), systemBarTop + dp(58), dp(16), 0)  // 让开状态栏 + 性能悬浮窗
             }
             addView(TextView(this@ProfessionalDemoActivity).apply {
-                text = "🧭  Liquid NavBar"
+                text = getString(R.string.showcase_navbar)
                 textSize = 16f
                 setTextColor(Color.WHITE)
                 gravity = Gravity.CENTER
@@ -1118,7 +1118,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 bottomMargin = dp(150)
             }
             addView(TextView(this@ProfessionalDemoActivity).apply {
-                text = "💳  Glass Card\nBlur · Aberration · Highlight"
+                text = getString(R.string.showcase_card)
                 textSize = 15f
                 setTextColor(Color.WHITE)
                 gravity = Gravity.CENTER
