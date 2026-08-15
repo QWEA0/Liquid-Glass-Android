@@ -329,6 +329,32 @@ anywhere in the tree, the overlap is computed from screen coordinates, and scrol
 repaints the glass automatically. Note that glass inside a `ScrollView` scrolling *with* the
 content sees a fixed backdrop by definition — that's physically correct, not a bug.
 
+**Can I put glass in a `Dialog` / `BottomSheetDialog` / `PopupWindow`?**
+Yes — the demo app's **Sheet** scene is a working `BottomSheetDialog`. Three things differ
+from the in-activity case:
+
+1. **The backdrop must be `backdropSource`.** A dialog has its own window, so the glass's
+   direct parent inside it is transparent and the default capture yields an empty (black)
+   panel. Point it at the activity instead —
+   `glass.backdropSource = activity.findViewById(android.R.id.content)`. The overlap is
+   computed from screen coordinates, so cross-window works and the GPU pipeline is kept.
+   Careful with `glass.apply { backdropSource = findViewById(…) }`: inside `apply` that
+   resolves to `View.findViewById`, silently returns `null`, and falls back to the
+   transparent parent.
+2. **Don't animate the window.** A window animation (the default for `BottomSheetDialog`,
+   and any `windowAnimationStyle`) is a SurfaceFlinger transform — the view tree never
+   redraws, `getLocationOnScreen` never changes, and the refraction freezes on the last
+   pre-animation frame while the surface slides. Disable it (`window.setWindowAnimations(0)`)
+   and animate a view inside the window instead, calling `glass.invalidate()` each frame so
+   the display list is re-recorded. Same for `BottomSheetBehavior` drags — it moves the sheet
+   with `offsetTopAndBottom`, which doesn't re-record children, so invalidate from `onSlide`.
+3. **Clear the window backgrounds,** or the glass sits on the dialog's opaque background.
+   For `BottomSheetDialog` that means the window, `container`, `coordinator` and
+   `design_bottom_sheet`; edge-to-edge has to come from the *theme* (`enableEdgeToEdge`),
+   since the dialog reads it at construction. Also set `dimAmount` to 0 — the dim is drawn
+   between the activity and the dialog, so the glass samples undimmed content and refracts
+   brighter than its surroundings.
+
 **Can I use this from Jetpack Compose?**
 You can via `AndroidView`, but you shouldn't. Use
 [Kyant0/AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) instead — it's
@@ -714,6 +740,26 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 如果两者没法放在同一个父容器里，就把 `backdropSource` 指向那个滚动视图——玻璃可以待在树的
 任意位置，覆盖区域按屏幕坐标实时算，滚动时自动重绘。另外，玻璃如果是**跟着内容一起滚动**的，
 它看到的背景本来就不变，这是物理正确的结果，不是 bug。
+
+**能在 `Dialog` / `BottomSheetDialog` / `PopupWindow` 里用玻璃吗？**
+可以，demo app 的**弹层**场景就是一个跑通的 `BottomSheetDialog`。和 Activity 内相比有三点不同：
+
+1. **背景必须走 `backdropSource`。** 对话框有独立 window，玻璃在里面的直接父容器是透明的，
+   默认捕获拍到的是空的（画面全黑）。要显式指到 Activity 上——
+   `glass.backdropSource = activity.findViewById(android.R.id.content)`。覆盖区域按屏幕坐标算，
+   所以跨 window 成立，且保留 GPU 管线。注意别写成
+   `glass.apply { backdropSource = findViewById(…) }`：`apply` 里的 `this` 是玻璃自己，
+   解析到的是 `View.findViewById`，静默返回 `null`，于是退回那个透明的父容器。
+2. **别用 window 动画。** window 动画（`BottomSheetDialog` 的默认行为，以及任何
+   `windowAnimationStyle`）是 SurfaceFlinger 层的变换，window 内的 view 树全程不重绘，
+   `getLocationOnScreen` 不变，折射就冻在动画前的最后一帧被 surface 拖着走。
+   关掉它（`window.setWindowAnimations(0)`），改成动 window 内部的 view，并逐帧
+   `glass.invalidate()` 强制重录 display list。`BottomSheetBehavior` 拖拽同理——它用
+   `offsetTopAndBottom` 挪容器，不会重录子视图，需要在 `onSlide` 里重绘。
+3. **清掉 window 的各层底色**，否则玻璃是坐在对话框的不透明背景上。`BottomSheetDialog`
+   要清 window、`container`、`coordinator` 和 `design_bottom_sheet` 四层；edge-to-edge
+   必须由**主题**给（`enableEdgeToEdge`），因为对话框在构造时就读了它。另外把 `dimAmount`
+   设为 0——变暗层画在 Activity 和对话框之间，玻璃采到的是没变暗的内容，折射出来会比周围亮一截。
 
 **能在 Jetpack Compose 里用吗？**
 用 `AndroidView` 包一层技术上可行，但不建议。请改用

@@ -139,6 +139,15 @@ Wrong enum constants are the usual cause of a failed build. These are the only v
 - `LiquidGlassView.setCustomBackdropCapture(capture: (RectF) -> Bitmap?)` — supply the backdrop
   bitmap yourself. Forces the CPU pipeline (disables the API 31+/33+ GPU paths); prefer
   `backdropSource` unless the backdrop is not a View at all.
+- Glass inside a `Dialog` / `BottomSheetDialog` / `PopupWindow` works (own window), with three
+  caveats: (1) `backdropSource` is mandatory — point it at
+  `activity.findViewById(android.R.id.content)`, and never inside `glass.apply { … }` where
+  `findViewById` resolves to `View.findViewById` and silently returns `null`; (2) window
+  animations are SurfaceFlinger transforms that never redraw the view tree, so the refraction
+  freezes — disable them (`window.setWindowAnimations(0)`), animate a view inside the window
+  and `glass.invalidate()` per frame (for `BottomSheetBehavior` drags, from `onSlide`);
+  (3) clear every background layer and set `dimAmount` to 0, and put `enableEdgeToEdge` in the
+  theme since the dialog reads it at construction.
 - `LiquidGlassView.frameStatsListener` / `FrameStats` — per-frame render timings.
 - `ScrollEdgeBlurView` — progressive scroll-edge blur. `edge`, `maxBlurRadius`,
   `bindScrollView(view)`.

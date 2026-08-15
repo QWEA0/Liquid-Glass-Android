@@ -42,6 +42,26 @@ Follow in order. Steps 1 and 4 are the ones most often missed.
    that looks frozen or empty — not an error.
 5. **Put your content inside** the `LiquidGlassView` as child views. It is a `FrameLayout`.
 
+### Glass inside a Dialog / BottomSheetDialog / PopupWindow
+
+Supported, but a dialog has its own window and three defaults work against you. The demo
+app's **Sheet** scene is a working reference.
+
+- `backdropSource` is **mandatory** — the glass's parent inside the dialog is transparent,
+  so the default capture is empty and the panel renders black. Use
+  `activity.findViewById(android.R.id.content)`. Do not write it inside `glass.apply { … }`:
+  there `findViewById` resolves to `View.findViewById`, returns `null` silently, and you
+  fall back to the transparent parent.
+- **Window animations freeze the refraction.** They are SurfaceFlinger transforms; the view
+  tree never redraws, so the glass keeps sampling at the pre-animation offset. Set
+  `window.setWindowAnimations(0)` and animate a view inside the window, calling
+  `glass.invalidate()` per frame. For `BottomSheetBehavior` drags, invalidate from `onSlide`.
+- **Clear every background layer** (window, `container`, `coordinator`,
+  `design_bottom_sheet`) and set `dimAmount` to 0 — the dim sits between the activity and the
+  dialog, so the glass refracts undimmed content and looks brighter than its surroundings.
+  Edge-to-edge must come from the theme (`enableEdgeToEdge`); the dialog reads it at
+  construction, so a runtime call is too late.
+
 ### Choosing parameters
 
 Start from the defaults and change one axis at a time.
