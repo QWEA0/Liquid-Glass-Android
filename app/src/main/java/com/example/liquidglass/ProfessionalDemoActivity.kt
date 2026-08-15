@@ -28,6 +28,7 @@ import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
@@ -44,6 +45,7 @@ import android.view.ViewOutlineProvider
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
@@ -55,6 +57,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import com.example.liquidglass.demo.R
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import java.util.Locale
 import kotlin.math.cos
@@ -71,6 +75,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         MERGE(R.string.scene_merge),
         HOME(R.string.scene_home),
         LIST(R.string.scene_list),
+        SHEET(R.string.scene_sheet),
         TEXT(R.string.scene_text),
         SHOWCASE(R.string.scene_showcase)
     }
@@ -97,6 +102,10 @@ class ProfessionalDemoActivity : AppCompatActivity() {
 
     // 性能监控数据源（融合场景使用场景内的玻璃视图）
     private var statsSource: LiquidGlassView? = null
+
+    // 弹层场景的对话框与其中的玻璃（跨 window，切场景/销毁时必须关掉）
+    private var bottomSheetDialog: BottomSheetDialog? = null
+    private var sheetGlass: LiquidGlassView? = null
 
     /** 状态栏高度，由 window insets 回填。场景里顶部对齐的文字/组件靠它避开状态栏与性能悬浮窗 */
     private var systemBarTop = 0
@@ -370,6 +379,8 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         glassView.backdropSource = null
         // TEXT 场景会改软键盘模式，切走时还原
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        // SHEET 场景的弹层在独立 window 里，不随 sceneHost 的清空而消失
+        dismissGlassBottomSheet()
 
         val root = when (scene) {
             Scene.SCROLL -> buildScrollScene()
@@ -378,6 +389,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             Scene.MERGE -> buildMergeScene()
             Scene.HOME -> buildHomeScene()
             Scene.LIST -> buildListScene()
+            Scene.SHEET -> buildSheetScene()
             Scene.TEXT -> buildTextScene()
             Scene.SHOWCASE -> buildShowcaseScene()
         }
@@ -738,6 +750,169 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             FrameLayout.LayoutParams.MATCH_PARENT
         ))
         return root
+    }
+
+    /**
+     * 场景 7：底部弹层 —— 玻璃在 [BottomSheetDialog] 里，背景取自 Activity 的内容视图。
+     *
+     * 这是**跨 window** 的用法。弹层自带一个独立 window，玻璃在那个 window 里的直接父容器
+     * 是透明的，默认的"捕获直接父容器"只会拍到空白，所以背景必须用
+     * [LiquidGlassView.backdropSource] 指到 Activity 的 content view 上。两个 window 之间的
+     * 偏移由屏幕坐标算（见 GlassLensRenderer 的 getLocationOnScreen），这条路保留 GPU 管线。
+     *
+     * 另有两处 Material 默认行为必须关掉，否则玻璃底下不是壁纸：
+     * - 弹层的窗口变暗（dim）画在 Activity 之上、弹层之下，玻璃采到的是**没变暗**的内容，
+     *   折射出来会比周围亮一截，所以 dimAmount 归零
+     * - design_bottom_sheet 容器默认白底，不清成透明的话玻璃背后是一层白
+     */
+    private fun buildSheetScene(): View {
+        val root = FrameLayout(this)
+
+        root.addView(ImageView(this).apply {
+            setImageResource(R.drawable.ios_wallpaper)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        // 图标网格提供高频边界，弹层滑动时的折射变化才看得出来
+        root.addView(HomeScreenGridView(this), FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        root.addView(Button(this).apply {
+            text = getString(R.string.sheet_open)
+            setOnClickListener { showGlassBottomSheet() }
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply { gravity = Gravity.CENTER })
+
+        return root
+    }
+
+    private fun showGlassBottomSheet() {
+        dismissGlassBottomSheet()
+
+        // 关键一行：背景来源跨到 Activity 的 window。
+        // 注意必须显式取 Activity 的 content view——写在 glass.apply {} 里的话
+        // findViewById 会解析成 View 自己的那个，在玻璃子树里找不到，静默返回 null，
+        // 背景来源退回默认的直接父容器（弹层里是透明的），画面全黑
+        val activityContent = findViewById<View>(android.R.id.content)
+
+        // 玻璃比可见高度多出 CORNER 的量并用负 margin 顶到屏幕外，
+        // 这样下面两个圆角被切掉，只剩上边圆角——iOS 弹层的形状
+        val visibleH = dp(300)
+        val overshoot = dp(40)
+        val glass = newExtraGlass(dpF(28)).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, visibleH + overshoot
+            ).apply { bottomMargin = -overshoot }
+            backdropSource = activityContent
+        }
+        glass.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(24), dp(12), dp(24), overshoot + dp(24))
+            // iOS 弹层顶部的拖拽指示条
+            addView(View(this@ProfessionalDemoActivity).apply {
+                background = GradientDrawable().apply {
+                    cornerRadius = dpF(3)
+                    setColor(0x80FFFFFF.toInt())
+                }
+                layoutParams = LinearLayout.LayoutParams(dp(40), dp(5)).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    bottomMargin = dp(20)
+                }
+            })
+            addView(TextView(this@ProfessionalDemoActivity).apply {
+                text = getString(R.string.sheet_title)
+                textSize = 20f
+                setTextColor(Color.WHITE)
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                setShadowLayer(6f, 0f, 1f, Color.BLACK)
+            })
+            addView(TextView(this@ProfessionalDemoActivity).apply {
+                text = getString(R.string.sheet_body)
+                textSize = 13f
+                setTextColor(0xFFEEEEEE.toInt())
+                gravity = Gravity.CENTER
+                setShadowLayer(6f, 0f, 1f, Color.BLACK)
+                setPadding(0, dp(10), 0, 0)
+            })
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        val sheetRoot = FrameLayout(this).apply { addView(glass) }
+
+        sheetGlass = glass
+        statsSource = glass
+        bottomSheetDialog = BottomSheetDialog(this, R.style.Theme_LiquidGlass_GlassBottomSheet).apply {
+            setContentView(sheetRoot)
+
+            // 变暗层夹在 Activity 和弹层之间，玻璃采不到它，留着就会亮暗不接
+            window?.setDimAmount(0f)
+            // 弹层的黑底来自这几层，只清 design_bottom_sheet 不够：
+            // window 自己的 windowBackground、外层 container、CoordinatorLayout 都要清
+            window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            // 导航栏的深色底衬（edge-to-edge 由主题开，见 Theme.LiquidGlass.GlassBottomSheet）
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                window?.isNavigationBarContrastEnforced = false
+            }
+            findViewById<View>(com.google.android.material.R.id.container)
+                ?.setBackgroundColor(Color.TRANSPARENT)
+            findViewById<View>(com.google.android.material.R.id.coordinator)
+                ?.setBackgroundColor(Color.TRANSPARENT)
+            val sheet = findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+            sheet?.setBackgroundColor(Color.TRANSPARENT)
+            sheet?.elevation = 0f
+
+            // 默认的进出场是 **window 动画**：SurfaceFlinger 直接平移整个 window 的 surface，
+            // window 内的 view 树全程不重绘，getLocationOnScreen 不变，玻璃只能按动画前的
+            // 偏移采样——看起来就是"最后一帧被拖着走"，没有动态折射。
+            // 解法：关掉 window 动画，把位移放进 view 树里自己做，并逐帧 invalidate 玻璃，
+            // 强制重录 display list、重算跨 window 偏移。
+            window?.setWindowAnimations(0)
+
+            // 拖拽/收起同理：BottomSheetBehavior 用 offsetTopAndBottom 挪容器，
+            // 不会重录子视图的 display list，必须在 onSlide 里手动 invalidate
+            behavior.skipCollapsed = true
+            behavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
+                override fun onStateChanged(bottomSheet: View, newState: Int) = glass.invalidate()
+                override fun onSlide(bottomSheet: View, slideOffset: Float) = glass.invalidate()
+            })
+            // 收起走 behavior 的动画（会触发 onSlide），而不是 window 动画
+            setDismissWithAnimation(true)
+
+            setOnShowListener {
+                if (sheet == null) return@setOnShowListener
+                // 首帧还没布局时 height 为 0，先按 alpha 藏住，post 到布局后再起手
+                sheet.alpha = 0f
+                sheet.post {
+                    sheet.translationY = sheet.height.toFloat()
+                    sheet.alpha = 1f
+                    sheet.animate()
+                        .translationY(0f)
+                        .setDuration(340)
+                        .setInterpolator(DecelerateInterpolator(1.8f))
+                        .setUpdateListener { glass.invalidate() }
+                        .start()
+                }
+            }
+            show()
+        }
+    }
+
+    private fun dismissGlassBottomSheet() {
+        bottomSheetDialog?.dismiss()
+        bottomSheetDialog = null
+        sheetGlass?.let { extraGlassViews.remove(it) }
+        sheetGlass = null
     }
 
     /**
@@ -1976,6 +2151,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        dismissGlassBottomSheet()
         performanceHandler.removeCallbacksAndMessages(null)
         customBackgroundBitmap?.recycle()
         customBackgroundBitmap = null

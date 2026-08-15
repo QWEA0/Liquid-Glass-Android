@@ -27,4 +27,22 @@
         <!-- Window 背景模糊 (API 31+) -->
         <item name="android:windowBackgroundBlurRadius" tools:targetApi="s">50dp</item>
     </style>
+
+    <!-- 弹层场景：玻璃要贴到屏幕底边。
+         edge-to-edge 必须由主题给（BottomSheetDialog 在构造时读这个属性决定要不要
+         给 sheet 补导航栏内边距），运行时再设 decorFitsSystemWindows already 晚了。
+         window / 导航栏 / sheet 三层底色全部清透明，否则玻璃周围是黑的。 -->
+    <style name="Theme.LiquidGlass.GlassBottomSheet" parent="Theme.MaterialComponents.DayNight.BottomSheetDialog">
+        <item name="enableEdgeToEdge">true</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="bottomSheetStyle">@style/Widget.LiquidGlass.BottomSheet</item>
+    </style>
+
+    <style name="Widget.LiquidGlass.BottomSheet" parent="Widget.MaterialComponents.BottomSheet">
+        <item name="android:background">@android:color/transparent</item>
+        <item name="backgroundTint">@android:color/transparent</item>
+        <item name="android:elevation">0dp</item>
+    </style>
 </resources>

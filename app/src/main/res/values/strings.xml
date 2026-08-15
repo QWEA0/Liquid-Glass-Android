@@ -179,6 +179,10 @@
     <string name="text_scene_hint">Type anything — it becomes glass</string>
     <string name="text_scene_apply">Apply</string>
     <string name="text_scene_default">Liquid</string>
+    <string name="scene_sheet">Sheet</string>
+    <string name="sheet_open">Open bottom sheet</string>
+    <string name="sheet_title">Glass in a separate window</string>
+    <string name="sheet_body">The sheet has its own window, so the backdrop comes from the activity content view via backdropSource.</string>
     <string name="simulate_api_label">Simulate API Level</string>
     <string name="api_cap_device">Device</string>
     <string name="simulate_api_desc">Clamps the pipeline tier to preview older devices: 36+ AGSL color filter/blend extras · 33–35 lens · 31–32 classic GPU · ≤30 CPU. The overlay shows real → effective API.</string>
