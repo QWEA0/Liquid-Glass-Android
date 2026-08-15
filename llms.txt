@@ -36,12 +36,13 @@ dependencyResolutionManagement {
 
 ```kotlin
 dependencies {
-    implementation("com.github.QWEA0.Liquid-Glass-Android:liquidglass:v2.0.1")
+    implementation("com.github.QWEA0:liquidglass:v2.0.1")
 }
 ```
 
-Artifact coordinates are `com.github.QWEA0.Liquid-Glass-Android:liquidglass`. The module
-name `liquidglass` is required — omitting it resolves the demo app, not the library.
+Artifact coordinates are `com.github.QWEA0:liquidglass`. JitPack aliases the same AAR as
+`com.github.QWEA0:Liquid-Glass-Android`; both resolve to the library. Note the group is
+`com.github.QWEA0`, not `com.github.QWEA0.Liquid-Glass-Android`.
 
 ## Minimal working example
 

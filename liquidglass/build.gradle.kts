@@ -57,7 +57,7 @@ dependencies {
 // JitPack 发布配置：
 // 使用方式（consumer 项目）：
 //   repositories { maven { url = uri("https://jitpack.io") } }
-//   dependencies { implementation("com.github.QWEA0.Liquid-Glass-Android:liquidglass:<tag>") }
+//   dependencies { implementation("com.github.QWEA0:liquidglass:<tag>") }
 afterEvaluate {
     publishing {
         publications {
