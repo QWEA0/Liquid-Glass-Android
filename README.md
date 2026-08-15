@@ -132,7 +132,7 @@ Add the dependency:
 
 ```kotlin
 dependencies {
-    implementation("com.github.QWEA0:liquidglass:v2.0.1")
+    implementation("com.github.QWEA0:liquidglass:v2.0.2")
 }
 ```
 
@@ -384,7 +384,7 @@ On a 2024-class device the AGSL pipeline runs the lens in well under 1 ms per fr
 **Why is the artifact `com.github.QWEA0:liquidglass`?**
 The `:liquidglass` module publishes under the group `com.github.QWEA0`, so that is the
 coordinate JitPack serves. JitPack also aliases the same AAR as
-`com.github.QWEA0:Liquid-Glass-Android:v2.0.1` — either resolves to the library. The
+`com.github.QWEA0:Liquid-Glass-Android:v2.0.2` — either resolves to the library. The
 multi-module form `com.github.QWEA0.Liquid-Glass-Android:liquidglass` does **not** exist.
 
 ### 🏗️ Architecture
@@ -552,7 +552,7 @@ dependencyResolutionManagement {
 
 ```kotlin
 dependencies {
-    implementation("com.github.QWEA0:liquidglass:v2.0.1")
+    implementation("com.github.QWEA0:liquidglass:v2.0.2")
 }
 ```
 
@@ -787,7 +787,7 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 
 **为什么依赖坐标是 `com.github.QWEA0:liquidglass`？**
 `:liquidglass` 模块以 `com.github.QWEA0` 为 group 发布，JitPack 对外提供的就是这个坐标。
-同一个 AAR 还有一份别名 `com.github.QWEA0:Liquid-Glass-Android:v2.0.1`，两者等价。
+同一个 AAR 还有一份别名 `com.github.QWEA0:Liquid-Glass-Android:v2.0.2`，两者等价。
 多模块写法 `com.github.QWEA0.Liquid-Glass-Android:liquidglass` **不存在**。
 
 ### 🏗️ 架构
