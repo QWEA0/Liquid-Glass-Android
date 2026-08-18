@@ -214,5 +214,16 @@
     <string name="param_tint_dark">Tint: dark (tap to toggle)</string>
     <string name="showcase_navbar">🧭  Liquid NavBar</string>
     <string name="showcase_card">💳  Glass Card\nBlur · Aberration · Highlight</string>
+
+    <!-- Widgets Scene (ready-made components) -->
+    <string name="scene_widgets">Widgets</string>
+    <string name="widgets_tab_1">Home</string>
+    <string name="widgets_tab_2">Explore</string>
+    <string name="widgets_tab_3">Library</string>
+    <string name="widgets_button_regular">✨ Glass Button</string>
+    <string name="widgets_button_clear">Clear Material</string>
+    <string name="widgets_toast_button">Clicked: %1$s</string>
+    <string name="widgets_toast_tab">Tab: %1$s</string>
+    <string name="widgets_toast_fab">FAB clicked</string>
 </resources>
 

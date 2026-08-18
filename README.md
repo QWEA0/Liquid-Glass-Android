@@ -90,6 +90,7 @@ If you're Compose-first, use Kyant0's — don't wrap this one in an `AndroidView
 - **⚡ High Performance** - Optimized with native C++ (NEON SIMD) and smart caching
 - **🎯 Easy Integration** - Simple XML attributes and Kotlin API
 - **🔧 Highly Customizable** - Fine-tune every aspect of the glass effect
+- **🧩 Ready-made Widgets** - `LiquidGlassButton` / `LiquidGlassFab` / `LiquidGlassTabBar`: pre-wired glass button, FAB and tab bar with click handling and adaptive foreground colors
 
 ### 📱 Demo
 
@@ -307,6 +308,19 @@ Exact spelling — invented constants are the usual cause of a failed build.
 `ScrollEdgeBlurView` — progressive scroll-edge blur: `edge`, `maxBlurRadius`,
 `bindScrollView(view)`.
 
+#### Ready-made widgets
+
+All three are `LiquidGlassView` subclasses — every glass property above still applies, and
+`setOnClickListener` works out of the box. With `enableAdaptiveTint = true` their foreground
+(text / icon / indicator) automatically flips between light and dark to match the backdrop,
+until you set an explicit color.
+
+| Widget | Notes |
+|---|---|
+| `LiquidGlassButton` | Pill glass button with a centered label. XML: `android:text`, `android:textSize`, `android:textColor`. Kotlin: `text`, `setTextColor(color)`, `textView` |
+| `LiquidGlassFab` | Circular 56dp floating button with a centered icon. XML: `android:src`, `app:glassIconTint`. Kotlin: `icon`, `setIconResource(id)`, `setIconTint(color)`, `imageView` |
+| `LiquidGlassTabBar` | iOS 26-style tab bar: icon-over-label tabs, selection indicator is a real glass droplet that refracts the content under it, slides with liquid stretch and is finger-draggable. Kotlin: `setTabs(List<TabItem>)` / `setTabs(titles)`, `selectedIndex`, `onTabSelected`, `selectedTintColor`. XML: `app:glassTabEntries` (text-only) |
+
 See [docs/LIQUID_GLASS_V2.md](docs/LIQUID_GLASS_V2.md) for the full lens-pipeline documentation.
 
 > **Using an AI coding agent?** [llms.txt](llms.txt) is a condensed, machine-readable digest of
@@ -396,6 +410,7 @@ multi-module form `com.github.QWEA0.Liquid-Glass-Android:liquidglass` does **not
 - `LightSourceController` - Gravity-sensor world-fixed light source for specular highlights
 - `BackdropLuminanceMeter` - Backdrop brightness sampling for adaptive tint
 - `ScrollEdgeBlurView` - Progressive blur overlay (scroll edge effect)
+- `LiquidGlassButton` / `LiquidGlassFab` / `LiquidGlassTabBar` - Ready-made widgets built on `LiquidGlassView`
 - `GlassAccessibility` - Reduce-transparency / reduce-motion / battery-saver detection
 - `EnhancedBlurEffect` - Multi-algorithm blur engine (Box, IIR Gaussian, Downsample)
 - `ChromaticAberrationEffect` - RGB channel separation processor
@@ -506,6 +521,7 @@ Inspired by the glassmorphism design trend and liquid-glass-react library.
 - **⚡ 高性能** - 使用原生 C++ (NEON SIMD) 和智能缓存优化
 - **🎯 易于集成** - 简单的 XML 属性和 Kotlin API
 - **🔧 高度可定制** - 精细调节玻璃效果的每个方面
+- **🧩 现成小部件** - `LiquidGlassButton` / `LiquidGlassFab` / `LiquidGlassTabBar`：预置点击派发与前景自适应配色的玻璃按钮、悬浮按钮和标签条
 
 完整透镜管线文档见 [docs/LIQUID_GLASS_V2.md](docs/LIQUID_GLASS_V2.md)。
 
@@ -725,6 +741,18 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 
 `ScrollEdgeBlurView` —— 滚动边缘渐进模糊：`edge`、`maxBlurRadius`、`bindScrollView(view)`。
 
+#### 现成小部件
+
+三个都是 `LiquidGlassView` 的子类——上面所有玻璃属性照常可用，`setOnClickListener`
+开箱即响。开启 `enableAdaptiveTint = true` 后前景（文字/图标/指示）会跟随背景明暗
+自动切换深浅色，显式设置过颜色则不再自动切换。
+
+| 小部件 | 说明 |
+|---|---|
+| `LiquidGlassButton` | 胶囊玻璃按钮，居中文字。XML：`android:text`、`android:textSize`、`android:textColor`。Kotlin：`text`、`setTextColor(color)`、`textView` |
+| `LiquidGlassFab` | 圆形 56dp 悬浮按钮，居中图标。XML：`android:src`、`app:glassIconTint`。Kotlin：`icon`、`setIconResource(id)`、`setIconTint(color)`、`imageView` |
+| `LiquidGlassTabBar` | iOS 26 风格标签条：图标+小字标签，选中指示是一颗真实玻璃滴（折射下方内容），切换带液态拉伸动画、可手指拖拽吸附。Kotlin：`setTabs(List<TabItem>)` / `setTabs(titles)`、`selectedIndex`、`onTabSelected`、`selectedTintColor`。XML：`app:glassTabEntries`（纯文字） |
+
 完整透镜管线文档见 [docs/LIQUID_GLASS_V2.md](docs/LIQUID_GLASS_V2.md)。
 
 ### ❓ 常见问题
@@ -799,6 +827,7 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 - `LightSourceController` - 重力传感器世界光源（镜面高光方向）
 - `BackdropLuminanceMeter` - 背景亮度采样（自适应染色数据源）
 - `ScrollEdgeBlurView` - 渐进模糊覆盖层（Scroll Edge Effect）
+- `LiquidGlassButton` / `LiquidGlassFab` / `LiquidGlassTabBar` - 基于 `LiquidGlassView` 的现成小部件
 - `GlassAccessibility` - 降低透明度/减弱动效/省电模式检测
 - `EnhancedBlurEffect` - 多算法模糊引擎（Box、IIR 高斯、降采样）
 - `ChromaticAberrationEffect` - RGB 通道分离处理器

@@ -39,7 +39,7 @@ import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import kotlin.math.*
 
-class LiquidGlassView @JvmOverloads constructor(
+open class LiquidGlassView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
@@ -405,6 +405,14 @@ class LiquidGlassView @JvmOverloads constructor(
      * @param isOverLight true = 亮背景，前景内容建议切换为深色
      */
     var glassAppearanceListener: ((isOverLight: Boolean) -> Unit)? = null
+
+    /**
+     * 子类钩子：背景明暗翻转时先于 [glassAppearanceListener] 调用
+     *
+     * 内置小部件（按钮/FAB/标签条）靠它自动切换前景配色，
+     * 不占用公开的 listener —— 使用方仍可自由设置 [glassAppearanceListener]
+     */
+    protected open fun onAppearanceChanged(isOverLight: Boolean) {}
 
     /** 当前是否判定为亮背景（自适应开启时由亮度采样驱动，否则等于 [overLight]） */
     val isOverLightBackground: Boolean
@@ -1258,6 +1266,7 @@ class LiquidGlassView @JvmOverloads constructor(
         val meter = luminanceMeter
         if (meter != null && meter.isOverLight != adaptiveOverLight) {
             adaptiveOverLight = meter.isOverLight
+            onAppearanceChanged(adaptiveOverLight)
             glassAppearanceListener?.invoke(adaptiveOverLight)
         }
 
@@ -1726,6 +1735,13 @@ class LiquidGlassView @JvmOverloads constructor(
                 // 无条件归位：即使按住期间效果被关闭，也不能卡在缩放状态
                 animateScale(false)
                 animatePress(false)
+                // 事件被这里消费了，不自己派发的话 OnClickListener 永远不会触发；
+                // 手指移出视图后抬起视为取消，与标准 Button 行为一致
+                if (event.action == MotionEvent.ACTION_UP && isClickable &&
+                    event.x in 0f..width.toFloat() && event.y in 0f..height.toFloat()
+                ) {
+                    performClick()
+                }
                 return true
             }
         }

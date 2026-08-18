@@ -214,5 +214,16 @@
     <string name="param_tint_dark">染色：暗（点击切换）</string>
     <string name="showcase_navbar">🧭  液态玻璃导航栏</string>
     <string name="showcase_card">💳  玻璃卡片\n模糊 · 色差 · 高光</string>
+
+    <!-- 小部件场景（现成组件） -->
+    <string name="scene_widgets">小部件</string>
+    <string name="widgets_tab_1">首页</string>
+    <string name="widgets_tab_2">探索</string>
+    <string name="widgets_tab_3">资料库</string>
+    <string name="widgets_button_regular">✨ 玻璃按钮</string>
+    <string name="widgets_button_clear">Clear 材质</string>
+    <string name="widgets_toast_button">点击了：%1$s</string>
+    <string name="widgets_toast_tab">标签：%1$s</string>
+    <string name="widgets_toast_fab">点击了 FAB</string>
 </resources>
 

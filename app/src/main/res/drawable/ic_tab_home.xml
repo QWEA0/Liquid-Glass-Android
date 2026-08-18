@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 小部件场景标签图标：房子（实心，SF Symbol house.fill 风格） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M11.35,3.55 C11.72,3.24 12.28,3.24 12.65,3.55 L20.65,10.3 C20.87,10.49 21,10.77 21,11.06 V19.5 C21,20.33 20.33,21 19.5,21 H15 C14.45,21 14,20.55 14,20 V15.5 C14,14.95 13.55,14.5 13,14.5 H11 C10.45,14.5 10,14.95 10,15.5 V20 C10,20.55 9.55,21 9,21 H4.5 C3.67,21 3,20.33 3,19.5 V11.06 C3,10.77 3.13,10.49 3.35,10.3 Z" />
+</vector>

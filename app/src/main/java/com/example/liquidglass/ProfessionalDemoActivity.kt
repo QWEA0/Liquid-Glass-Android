@@ -77,7 +77,8 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         LIST(R.string.scene_list),
         SHEET(R.string.scene_sheet),
         TEXT(R.string.scene_text),
-        SHOWCASE(R.string.scene_showcase)
+        SHOWCASE(R.string.scene_showcase),
+        WIDGETS(R.string.scene_widgets)
     }
 
     private var currentScene = Scene.SCROLL
@@ -392,6 +393,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             Scene.SHEET -> buildSheetScene()
             Scene.TEXT -> buildTextScene()
             Scene.SHOWCASE -> buildShowcaseScene()
+            Scene.WIDGETS -> buildWidgetsScene()
         }
         sceneHost.addView(root)
         updateSceneBar()
@@ -1322,6 +1324,111 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             })
         })
 
+        return root
+    }
+
+    /** 场景 10：现成小部件（LiquidGlassButton / LiquidGlassTabBar / LiquidGlassFab，全部库默认参数开箱展示） */
+    private fun buildWidgetsScene(): View {
+        val root = FrameLayout(this)
+        root.addView(createColorScroll())
+
+        // 顶部玻璃标签条：iOS 26 风格（图标+小字，玻璃滴指示可点可拖）
+        val tabTitles = listOf(
+            getString(R.string.widgets_tab_1),
+            getString(R.string.widgets_tab_2),
+            getString(R.string.widgets_tab_3)
+        )
+        val tabIcons = listOf(
+            R.drawable.ic_tab_home,
+            R.drawable.ic_tab_explore,
+            R.drawable.ic_tab_library
+        )
+        val tabBar = LiquidGlassTabBar(this).apply {
+            enableDynamicBackground = true
+            setTabs(tabTitles.zip(tabIcons) { title, iconRes ->
+                LiquidGlassTabBar.TabItem(title, ContextCompat.getDrawable(this@ProfessionalDemoActivity, iconRes))
+            })
+            onTabSelected = { index ->
+                Toast.makeText(
+                    this@ProfessionalDemoActivity,
+                    getString(R.string.widgets_toast_tab, tabTitles[index]),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.TOP
+                setMargins(dp(20), systemBarTop + dp(58), dp(20), 0)  // 让开状态栏 + 性能悬浮窗
+            }
+        }
+        root.addView(tabBar)
+
+        // 中央按钮：Regular / Clear 两种材质对比。
+        // 注意必须直接挂在 root 下——玻璃捕获直接父容器，包一层透明
+        // LinearLayout 的话捕获到的就是空内容，按钮会渲染成黑底
+        val regularButton = LiquidGlassButton(this).apply {
+            enableDynamicBackground = true
+            text = getString(R.string.widgets_button_regular)
+            setOnClickListener {
+                Toast.makeText(
+                    this@ProfessionalDemoActivity,
+                    getString(R.string.widgets_toast_button, text),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER
+                topMargin = -dp(44)
+            }
+        }
+        root.addView(regularButton)
+        root.addView(LiquidGlassButton(this).apply {
+            enableDynamicBackground = true
+            material = GlassMaterial.CLEAR
+            text = getString(R.string.widgets_button_clear)
+            setOnClickListener {
+                Toast.makeText(
+                    this@ProfessionalDemoActivity,
+                    getString(R.string.widgets_toast_button, text),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER
+                topMargin = dp(44)
+            }
+        })
+
+        // 左下圆形玻璃 FAB
+        root.addView(LiquidGlassFab(this).apply {
+            enableDynamicBackground = true
+            setIconResource(android.R.drawable.ic_input_add)
+            setOnClickListener {
+                Toast.makeText(
+                    this@ProfessionalDemoActivity,
+                    getString(R.string.widgets_toast_fab),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.START or Gravity.BOTTOM
+                setMargins(dp(24), 0, 0, dp(96))
+            }
+        })
+
+        // 本场景不含主 glassView，性能悬浮窗读常规材质按钮的数据
+        statsSource = regularButton
         return root
     }
 

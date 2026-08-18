@@ -35,4 +35,24 @@
         <attr name="sensorHighlight" format="boolean" />
         <attr name="adaptiveTint" format="boolean" />
     </declare-styleable>
+
+    <!-- 现成小部件：玻璃按钮（文字沿用 android 命名空间属性） -->
+    <declare-styleable name="LiquidGlassButton">
+        <attr name="android:text" />
+        <attr name="android:textSize" />
+        <!-- 显式指定后前景不再跟随背景明暗自动切换 -->
+        <attr name="android:textColor" />
+    </declare-styleable>
+
+    <!-- 现成小部件：圆形玻璃悬浮按钮 -->
+    <declare-styleable name="LiquidGlassFab">
+        <attr name="android:src" />
+        <!-- 显式指定后图标不再跟随背景明暗自动切换 -->
+        <attr name="glassIconTint" format="color" />
+    </declare-styleable>
+
+    <!-- 现成小部件：玻璃标签条（entries 指向 string-array） -->
+    <declare-styleable name="LiquidGlassTabBar">
+        <attr name="glassTabEntries" format="reference" />
+    </declare-styleable>
 </resources>

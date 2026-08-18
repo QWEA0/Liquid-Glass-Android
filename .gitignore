@@ -73,3 +73,4 @@ gradle-app.setting
 keystore.properties
 *.jks
 *.keystore
+AGENTS.md

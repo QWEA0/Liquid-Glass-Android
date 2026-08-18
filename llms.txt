@@ -151,6 +151,23 @@ Wrong enum constants are the usual cause of a failed build. These are the only v
 - `LiquidGlassView.frameStatsListener` / `FrameStats` — per-frame render timings.
 - `ScrollEdgeBlurView` — progressive scroll-edge blur. `edge`, `maxBlurRadius`,
   `bindScrollView(view)`.
+- Ready-made widgets — all subclasses of `LiquidGlassView` (every glass property applies;
+  `setOnClickListener` works; with `enableAdaptiveTint = true` the foreground auto-flips
+  light/dark until an explicit color is set):
+  - `LiquidGlassButton` — pill button with centered label. XML `android:text` /
+    `android:textSize` / `android:textColor`; Kotlin `text`, `setTextColor(color)`, `textView`.
+  - `LiquidGlassFab` — circular 56dp icon button. XML `android:src` / `app:glassIconTint`;
+    Kotlin `icon`, `setIconResource(id)`, `setIconTint(color)`, `imageView`.
+  - `LiquidGlassTabBar` — iOS 26-style tab bar: icon-over-label tabs (equal width), and the
+    selection indicator is a real glass droplet (a nested lens) that refracts the bar
+    content under it, slides with overshoot + liquid stretch, and can be dragged with the
+    finger (snaps to the nearest tab on release). Kotlin
+    `setTabs(List<LiquidGlassTabBar.TabItem>)` (`TabItem(title, icon: Drawable?)`; a null
+    icon makes that tab text-only), `setTabs(List<CharSequence>)` for text-only bars,
+    `selectedIndex`, `onTabSelected: ((Int) -> Unit)?`, `selectedTintColor: Int?` (default
+    null = auto white/black by backdrop luminance; set a color for a brand tint). XML
+    `app:glassTabEntries` (string-array, text-only). `setTabs` resets selection to 0
+    without firing the callback; setting `selectedIndex` fires it.
 
 ## Links
 
