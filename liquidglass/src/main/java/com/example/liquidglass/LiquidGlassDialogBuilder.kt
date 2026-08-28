@@ -34,7 +34,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
-class LiquidGlassDialogBuilder(
+class LiquidGlassDialogBuilder @JvmOverloads constructor(
     context: Context,
     themeResId: Int = 0,
     private val cornerRadiusDp: Float = 28f,
