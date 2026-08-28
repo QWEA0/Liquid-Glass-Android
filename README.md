@@ -90,7 +90,7 @@ If you're Compose-first, use Kyant0's — don't wrap this one in an `AndroidView
 - **⚡ High Performance** - Optimized with native C++ (NEON SIMD) and smart caching
 - **🎯 Easy Integration** - Simple XML attributes and Kotlin API
 - **🔧 Highly Customizable** - Fine-tune every aspect of the glass effect
-- **🧩 Ready-made Widgets** - `LiquidGlassButton` / `LiquidGlassFab` / `LiquidGlassTabBar`: pre-wired glass button, FAB and tab bar with click handling and adaptive foreground colors
+- **🧩 Ready-made Widgets** - `LiquidGlassButton` / `LiquidGlassFab` / `LiquidGlassTabBar` / `LiquidGlassDialogBuilder`: pre-wired glass button, FAB, tab bar and Material dialog with click handling and adaptive foreground colors
 
 ### 📱 Demo
 
@@ -320,6 +320,7 @@ until you set an explicit color.
 | `LiquidGlassButton` | Pill glass button with a centered label. XML: `android:text`, `android:textSize`, `android:textColor`. Kotlin: `text`, `setTextColor(color)`, `textView` |
 | `LiquidGlassFab` | Circular 56dp floating button with a centered icon. XML: `android:src`, `app:glassIconTint`. Kotlin: `icon`, `setIconResource(id)`, `setIconTint(color)`, `imageView` |
 | `LiquidGlassTabBar` | iOS 26-style tab bar: icon-over-label tabs, selection indicator is a real glass droplet that refracts the content under it, slides with liquid stretch and is finger-draggable. Kotlin: `setTabs(List<TabItem>)` / `setTabs(titles)`, `selectedIndex`, `onTabSelected`, `selectedTintColor`. XML: `app:glassTabEntries` (text-only) |
+| `LiquidGlassDialogBuilder` | `MaterialAlertDialogBuilder` whose whole panel is wrapped in a `LiquidGlassView`. Backdrop is captured from the activity behind, title/message/buttons follow the adaptive light-dark switch. Kotlin: `cornerRadiusDp`, `glassBlurAmount`, `animateShow`, `dimBehind`, `glassSetup`, `glass`, `dismissAnimated()`. Requires the app to depend on appcompat + material (the library keeps them `compileOnly`) |
 
 See [docs/LIQUID_GLASS_V2.md](docs/LIQUID_GLASS_V2.md) for the full lens-pipeline documentation.
 
@@ -411,6 +412,7 @@ multi-module form `com.github.QWEA0.Liquid-Glass-Android:liquidglass` does **not
 - `BackdropLuminanceMeter` - Backdrop brightness sampling for adaptive tint
 - `ScrollEdgeBlurView` - Progressive blur overlay (scroll edge effect)
 - `LiquidGlassButton` / `LiquidGlassFab` / `LiquidGlassTabBar` - Ready-made widgets built on `LiquidGlassView`
+- `LiquidGlassDialogBuilder` - Material dialog builder that wraps the dialog panel in glass
 - `GlassAccessibility` - Reduce-transparency / reduce-motion / battery-saver detection
 - `EnhancedBlurEffect` - Multi-algorithm blur engine (Box, IIR Gaussian, Downsample)
 - `ChromaticAberrationEffect` - RGB channel separation processor
@@ -521,7 +523,7 @@ Inspired by the glassmorphism design trend and liquid-glass-react library.
 - **⚡ 高性能** - 使用原生 C++ (NEON SIMD) 和智能缓存优化
 - **🎯 易于集成** - 简单的 XML 属性和 Kotlin API
 - **🔧 高度可定制** - 精细调节玻璃效果的每个方面
-- **🧩 现成小部件** - `LiquidGlassButton` / `LiquidGlassFab` / `LiquidGlassTabBar`：预置点击派发与前景自适应配色的玻璃按钮、悬浮按钮和标签条
+- **🧩 现成小部件** - `LiquidGlassButton` / `LiquidGlassFab` / `LiquidGlassTabBar` / `LiquidGlassDialogBuilder`：预置点击派发与前景自适应配色的玻璃按钮、悬浮按钮、标签条和 Material 弹窗
 
 完整透镜管线文档见 [docs/LIQUID_GLASS_V2.md](docs/LIQUID_GLASS_V2.md)。
 
@@ -752,6 +754,7 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 | `LiquidGlassButton` | 胶囊玻璃按钮，居中文字。XML：`android:text`、`android:textSize`、`android:textColor`。Kotlin：`text`、`setTextColor(color)`、`textView` |
 | `LiquidGlassFab` | 圆形 56dp 悬浮按钮，居中图标。XML：`android:src`、`app:glassIconTint`。Kotlin：`icon`、`setIconResource(id)`、`setIconTint(color)`、`imageView` |
 | `LiquidGlassTabBar` | iOS 26 风格标签条：图标+小字标签，选中指示是一颗真实玻璃滴（折射下方内容），切换带液态拉伸动画、可手指拖拽吸附。Kotlin：`setTabs(List<TabItem>)` / `setTabs(titles)`、`selectedIndex`、`onTabSelected`、`selectedTintColor`。XML：`app:glassTabEntries`（纯文字） |
+| `LiquidGlassDialogBuilder` | 把 `MaterialAlertDialogBuilder` 的整个面板套进 `LiquidGlassView`。背景从后面的 Activity 采，标题/正文/按钮跟随明暗自适应切换。Kotlin：`cornerRadiusDp`、`glassBlurAmount`、`animateShow`、`dimBehind`、`glassSetup`、`glass`、`dismissAnimated()`。使用方需自行依赖 appcompat + material（库里是 `compileOnly`） |
 
 完整透镜管线文档见 [docs/LIQUID_GLASS_V2.md](docs/LIQUID_GLASS_V2.md)。
 
@@ -828,6 +831,7 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 - `BackdropLuminanceMeter` - 背景亮度采样（自适应染色数据源）
 - `ScrollEdgeBlurView` - 渐进模糊覆盖层（Scroll Edge Effect）
 - `LiquidGlassButton` / `LiquidGlassFab` / `LiquidGlassTabBar` - 基于 `LiquidGlassView` 的现成小部件
+- `LiquidGlassDialogBuilder` - 把弹窗面板套进玻璃的 Material 弹窗构建器
 - `GlassAccessibility` - 降低透明度/减弱动效/省电模式检测
 - `EnhancedBlurEffect` - 多算法模糊引擎（Box、IIR 高斯、降采样）
 - `ChromaticAberrationEffect` - RGB 通道分离处理器

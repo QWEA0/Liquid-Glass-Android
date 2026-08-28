@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 空动画：进场由 LiquidGlassDialogBuilder 在 view 树里做，window 层不能动 surface -->
+<alpha xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="0"
+    android:fromAlpha="1.0"
+    android:toAlpha="1.0" />

@@ -784,15 +784,34 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             FrameLayout.LayoutParams.MATCH_PARENT
         ))
 
-        root.addView(Button(this).apply {
-            text = getString(R.string.sheet_open)
-            setOnClickListener { showGlassBottomSheet() }
+        // 两个入口：BottomSheetDialog 和 AlertDialog，都是跨 window 采背景
+        root.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            addView(Button(this@ProfessionalDemoActivity).apply {
+                text = getString(R.string.sheet_open)
+                setOnClickListener { showGlassBottomSheet() }
+            })
+            addView(Button(this@ProfessionalDemoActivity).apply {
+                text = getString(R.string.sheet_dialog_open)
+                setOnClickListener { showGlassDialog() }
+            })
         }, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).apply { gravity = Gravity.CENTER })
 
         return root
+    }
+
+    /** 玻璃弹窗：面板整个套进 LiquidGlassView，背景来自 Activity 的 content view */
+    private fun showGlassDialog() {
+        LiquidGlassDialogBuilder(this)
+            .setTitle(R.string.sheet_dialog_title)
+            .setMessage(R.string.sheet_dialog_body)
+            .setPositiveButton(android.R.string.ok, null)
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun showGlassBottomSheet() {

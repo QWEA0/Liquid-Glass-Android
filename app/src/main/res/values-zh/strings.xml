@@ -183,6 +183,9 @@
     <string name="sheet_open">打开底部弹层</string>
     <string name="sheet_title">跨 window 的玻璃</string>
     <string name="sheet_body">弹层有独立 window，背景靠 backdropSource 指到 Activity 的内容视图。</string>
+    <string name="sheet_dialog_open">打开玻璃弹窗</string>
+    <string name="sheet_dialog_title">玻璃弹窗</string>
+    <string name="sheet_dialog_body">Material 弹窗的整个面板套在 LiquidGlassView 里。</string>
     <string name="simulate_api_label">模拟 API 级别</string>
     <string name="api_cap_device">跟随设备</string>
     <string name="simulate_api_desc">把管线分层钳制到指定级别，预览低版本机型效果：36+ AGSL 颜色滤镜/混合增强 · 33–35 透镜 · 31–32 经典 GPU · ≤30 CPU。悬浮层显示 实际 → 生效 API。</string>

@@ -147,7 +147,8 @@ Wrong enum constants are the usual cause of a failed build. These are the only v
   freezes — disable them (`window.setWindowAnimations(0)`), animate a view inside the window
   and `glass.invalidate()` per frame (for `BottomSheetBehavior` drags, from `onSlide`);
   (3) clear every background layer and set `dimAmount` to 0, and put `enableEdgeToEdge` in the
-  theme since the dialog reads it at construction.
+  theme since the dialog reads it at construction. For a plain `AlertDialog`, use
+  `LiquidGlassDialogBuilder` instead of doing all three by hand.
 - `LiquidGlassView.frameStatsListener` / `FrameStats` — per-frame render timings.
 - `ScrollEdgeBlurView` — progressive scroll-edge blur. `edge`, `maxBlurRadius`,
   `bindScrollView(view)`.
@@ -168,6 +169,17 @@ Wrong enum constants are the usual cause of a failed build. These are the only v
     null = auto white/black by backdrop luminance; set a color for a brand tint). XML
     `app:glassTabEntries` (string-array, text-only). `setTabs` resets selection to 0
     without firing the callback; setting `selectedIndex` fires it.
+- `LiquidGlassDialogBuilder` — a `MaterialAlertDialogBuilder` (not a `LiquidGlassView`
+  subclass) that swaps the dialog panel into a `LiquidGlassView` on the first pre-draw:
+  `backdropSource` is wired to the activity content view, backgrounds are cleared, the
+  panel enters with a scale+fade and leaves with an alpha-only window animation (a moving
+  window animation would freeze the refraction). Title, message and the three buttons are
+  recoloured by the adaptive light/dark switch. Constructor: `themeResId`, `cornerRadiusDp`
+  (28), `glassBlurAmount` (0.6 — the `LiquidGlassView` default of 0.0625 is far too weak for
+  a panel this large), `animateShow`, `dimBehind`, `glassSetup: (LiquidGlassView.() -> Unit)?`
+  for any further glass tuning. Exposes `glass` and `dismissAnimated()` (scale-down exit).
+  The library declares appcompat + material as `compileOnly`, so an app using this class must
+  depend on them itself.
 
 ## Links
 

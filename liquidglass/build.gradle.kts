@@ -52,6 +52,13 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+
+    // 只有 LiquidGlassDialogBuilder 用到 AlertDialog / MaterialAlertDialogBuilder。
+    // compileOnly：编译期可见但不写进 POM，使用方不碰这个类就不会被强制拖进
+    // appcompat + material（库其余部分保持只依赖 core-ktx）。
+    // 要用玻璃弹窗的话，使用方自己引入这两个库即可。
+    compileOnly(libs.androidx.appcompat)
+    compileOnly(libs.material)
 }
 
 // JitPack 发布配置：

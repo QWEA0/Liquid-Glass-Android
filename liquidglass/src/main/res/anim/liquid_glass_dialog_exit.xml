@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 退场只做透明度：缩放/平移 window 的 surface 会把玻璃的折射冻在最后一帧 -->
+<alpha xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="150"
+    android:fromAlpha="1.0"
+    android:interpolator="@android:anim/accelerate_interpolator"
+    android:toAlpha="0.0" />

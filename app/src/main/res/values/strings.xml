@@ -183,6 +183,9 @@
     <string name="sheet_open">Open bottom sheet</string>
     <string name="sheet_title">Glass in a separate window</string>
     <string name="sheet_body">The sheet has its own window, so the backdrop comes from the activity content view via backdropSource.</string>
+    <string name="sheet_dialog_open">Open glass dialog</string>
+    <string name="sheet_dialog_title">Liquid Glass Dialog</string>
+    <string name="sheet_dialog_body">A Material dialog whose whole panel sits inside a LiquidGlassView.</string>
     <string name="simulate_api_label">Simulate API Level</string>
     <string name="api_cap_device">Device</string>
     <string name="simulate_api_desc">Clamps the pipeline tier to preview older devices: 36+ AGSL color filter/blend extras · 33–35 lens · 31–32 classic GPU · ≤30 CPU. The overlay shows real → effective API.</string>

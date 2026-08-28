@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- 玻璃弹窗的 window 动画：进场空转（交给 view 树），退场纯 alpha。
+         这样返回键、点击外部、按钮、dismiss() 所有关闭路径都有淡出，
+         又不会因为 surface 位移让折射停在动画前那一帧。 -->
+    <style name="Animation.LiquidGlass.Dialog" parent="@android:style/Animation.Dialog">
+        <item name="android:windowEnterAnimation">@anim/liquid_glass_dialog_none</item>
+        <item name="android:windowExitAnimation">@anim/liquid_glass_dialog_exit</item>
+    </style>
+
+</resources>
