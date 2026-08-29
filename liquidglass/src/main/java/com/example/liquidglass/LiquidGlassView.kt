@@ -30,6 +30,8 @@ import android.content.Context
 import android.graphics.*
 import android.os.Build
 import android.util.AttributeSet
+import androidx.annotation.ColorInt
+import androidx.core.graphics.ColorUtils
 import android.util.Log
 import android.view.MotionEvent
 import android.view.View
@@ -52,6 +54,10 @@ open class LiquidGlassView @JvmOverloads constructor(
 
         // 背景变化检测的抽样网格（8x8 = 最多 64 个采样点）
         private const val BACKDROP_SAMPLE_GRID = 8
+
+        // 自定义染色默认透明度（0-255，约 14%）：仅当调用方传入不含 alpha 的
+        // 完全不透明颜色时使用，把它摊开成通透玻璃的染色，避免糊成实心色块
+        private const val DEFAULT_CUSTOM_TINT_ALPHA = 0x24
 
         /**
          * 全局亮度采样标志：BackdropLuminanceMeter 采样父视图期间为 true，
@@ -435,6 +441,9 @@ open class LiquidGlassView @JvmOverloads constructor(
     private var adaptiveOverLight = false
     private var adaptiveTintColor = 0x24FFFFFF
     private var lastAppliedTint = 0
+
+    // 自定义染色（setCustomTintColor）；null = 未启用，沿用材质/自适应染色
+    private var customTintColor: Int? = null
 
     // API 36+ AGSL 运行时效果（CPU 管线的最终合成用；不支持时为 null 走回退）
     private var adaptiveTintBlender: RuntimeXfermode? = null
@@ -1060,7 +1069,8 @@ open class LiquidGlassView @JvmOverloads constructor(
                 // API 36+ 硬件画布：RuntimeXfermode 按局部亮度逐像素染色
                 // （与透镜管线同一条曲线），否则回退全局染色覆盖层
                 var perPixelTinted = false
-                if (material.adaptiveTint && enableAdaptiveTint &&
+                if (customTintColor == null &&
+                    material.adaptiveTint && enableAdaptiveTint &&
                     canvas.isHardwareAccelerated && GlassRuntimeEffects.isSupported &&
                     debugApiLevelCap >= Build.VERSION_CODES.BAKLAVA
                 ) {
@@ -1180,8 +1190,10 @@ open class LiquidGlassView @JvmOverloads constructor(
         val margin = computeLensMargin(radius)
 
         // —— 染色：Regular + 自适应时改走着色器内逐像素染色；tint 固定传 0，
-        // 避免亮度采样 tick 更新全局染色触发无意义的 effect 重建 ——
-        val adaptivePerPixel = material.adaptiveTint && enableAdaptiveTint
+        // 避免亮度采样 tick 更新全局染色触发无意义的 effect 重建。
+        // 设置了自定义染色时关闭逐像素路径，让自定义颜色稳定生效 ——
+        val adaptivePerPixel = material.adaptiveTint && enableAdaptiveTint &&
+            customTintColor == null
 
         val params = GlassLensRenderer.LensParams(
             blurRadius = radius,
@@ -1239,13 +1251,75 @@ open class LiquidGlassView @JvmOverloads constructor(
     }
 
     /**
-     * 当前染色：自适应（亮度采样）或材质基础染色
+     * 当前染色：自定义染色（若设置）＞ 自适应（亮度采样）＞ 材质基础染色
      */
     private fun currentTintColor(): Int {
+        customTintColor?.let { return it }
         if (material.adaptiveTint && enableAdaptiveTint) {
             return adaptiveTintColor
         }
         return if (overLight) 0x33000000 else material.baseTint
+    }
+
+    /**
+     * 设置自定义玻璃染色（Telegram 风格：玻璃保持通透，但带上你自己的颜色）。
+     *
+     * 透明度规则：
+     * - 传入颜色本身带 alpha（半透明）时，原样保留其不透明度；
+     * - 传入颜色为完全不透明（alpha = 255，比如 `Color.RED`）时，会自动用
+     *   [alpha] 参数摊一层通透度——玻璃永远是玻璃，只是换成了你的颜色，
+     *   绝不会糊成实心色块。
+     *
+     * 该方法在 Java 中可直接调用（无 nullable 参数）：`view.setCustomTintColor(Color.RED)`。
+     * 优先于材质与自适应染色生效，并会关闭 REGULAR 材质的逐像素自适应染色
+     * （Adaptive Tint），让自定义颜色稳定落在玻璃上；前景内容（文字/图标）的
+     * 明暗自适应回调不受影响，仍照常工作。调用 [clearCustomTint] 恢复为
+     * 材质/自适应染色。
+     *
+     * @param color 目标颜色（ARGB）。
+     */
+    fun setCustomTintColor(@ColorInt color: Int) {
+        // 单参重载 = 使用默认透明度；two-arg 重载语义一致
+        applyCustomTint(color, DEFAULT_CUSTOM_TINT_ALPHA)
+    }
+
+    /**
+     * 设置自定义玻璃染色，并指定不透明颜色摊开的透明度。
+     *
+     * @param color 目标颜色（ARGB）。
+     * @param alpha 仅当 [color] 为不透明（无 alpha）时使用的默认透明度（0-255），
+     *              默认约 14%（0x24），可传 0-255 调整玻璃浓淡。
+     */
+    fun setCustomTintColor(@ColorInt color: Int, alpha: Int) {
+        applyCustomTint(color, alpha)
+    }
+
+    /**
+     * 清除自定义染色，恢复为材质/自适应染色（Java：`view.clearCustomTint()`）。
+     */
+    fun clearCustomTint() {
+        if (customTintColor != null) {
+            customTintColor = null
+            blurDirty = true
+            aberrationDirty = true
+            dispersionDirty = true
+            invalidate()
+        }
+    }
+
+    private fun applyCustomTint(color: Int, alpha: Int) {
+        val resolved: Int? = if (Color.alpha(color) < 255) {
+            color
+        } else {
+            ColorUtils.setAlphaComponent(color, alpha.coerceIn(0, 255))
+        }
+        if (customTintColor != resolved) {
+            customTintColor = resolved
+            blurDirty = true
+            aberrationDirty = true
+            dispersionDirty = true
+            invalidate()
+        }
     }
 
     // ==================== 亮度自适应 ====================

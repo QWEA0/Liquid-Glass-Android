@@ -303,6 +303,8 @@ Exact spelling — invented constants are the usual cause of a failed build.
 | `setSecondaryShape(rect: RectF?, cornerRadiusPx: Float = 999f, smoothing: Float = 48f)` | **33+** Two shapes blend with smooth-min, like mercury |
 | `setBackdropSource(source: View?)` | Capture any view instead of the direct parent — free of the hierarchy, **keeps the GPU pipeline** |
 | `setCustomBackdropCapture(capture: (RectF) -> Bitmap?)` | Supply your own backdrop bitmap. Forces the CPU pipeline — prefer `setBackdropSource` |
+| `setCustomTintColor(@ColorInt color: Int)` / `setCustomTintColor(color: Int, alpha: Int)` | **Telegram-style custom tint** (Java-friendly, no nullable params): give the glass its own color while keeping it translucent. If `color` already carries alpha it is kept as-is; if it's fully opaque it's made translucent with `alpha` (0–255, default ~14%). Takes precedence over adaptive/material tint (disables Regular per-pixel adaptive tint); foreground light/dark callback keeps working |
+| `clearCustomTint()` | Revert to adaptive/material tint |
 | `refreshAccessibilityState()` | Re-read system accessibility settings |
 
 `ScrollEdgeBlurView` — progressive scroll-edge blur: `edge`, `maxBlurRadius`,
@@ -739,6 +741,8 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 | `setSecondaryShape(rect: RectF?, cornerRadiusPx: Float = 999f, smoothing: Float = 48f)` | **33+** 双形状 smin 黏连合并 |
 | `setBackdropSource(source: View?)` | 捕获指定视图而非直接父容器，摆脱层级约束，**保留 GPU 管线** |
 | `setCustomBackdropCapture(capture: (RectF) -> Bitmap?)` | 自己提供背景位图。会强制回退 CPU 管线，优先用 `setBackdropSource` |
+| `setCustomTintColor(@ColorInt color: Int)` / `setCustomTintColor(color: Int, alpha: Int)` | **自定义玻璃染色（Telegram 风格，Java 可直接调用，无 nullable 参数）**：给玻璃换上你自己的颜色，同时保持通透。`color` 自带 alpha（半透明）时原样保留；若是完全不透明则自动用 `alpha`（0-255，默认约 14%）摊开。优先级高于材质与自适应染色（会关闭 Regular 逐像素自适应染色）；前景明暗自适应回调不受影响 |
+| `clearCustomTint()` | 清除自定义染色，恢复为材质/自适应染色 |
 | `refreshAccessibilityState()` | 重新读取系统无障碍设置 |
 
 `ScrollEdgeBlurView` —— 滚动边缘渐进模糊：`edge`、`maxBlurRadius`、`bindScrollView(view)`。

@@ -130,6 +130,14 @@ Wrong enum constants are the usual cause of a failed build. These are the only v
   — two shapes blend with a smooth-min, producing the mercury-like merge. API 33+.
 - `LiquidGlassView.glassAppearanceListener: ((isOverLight: Boolean) -> Unit)?` — fires when
   the backdrop luminance flips; use it to switch your foreground text between light and dark.
+- `LiquidGlassView.setCustomTintColor(@ColorInt color: Int)` /
+  `LiquidGlassView.setCustomTintColor(color: Int, alpha: Int)` — Telegram-style custom glass
+  tint (Java-friendly, no nullable params): give the glass its own color while keeping it
+  translucent. If `color` already has alpha it is used as-is; a fully opaque color is made
+  translucent with `alpha` (0–255, default ≈14%, via `ColorUtils.setAlphaComponent`). Takes
+  precedence over adaptive/material tint (disables the Regular per-pixel adaptive tint so the
+  custom color stays put); the foreground light/dark callback is unaffected.
+- `LiquidGlassView.clearCustomTint()` — revert to adaptive/material tint.
 - `LiquidGlassView.backdropSource: View?` — which view to capture as the backdrop. `null`
   (default) = the direct parent, so the backdrop must be a sibling. Set it to any view in the
   tree (a RecyclerView the glass floats over, a wallpaper outside the ScrollView) and the

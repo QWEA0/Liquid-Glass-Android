@@ -1426,6 +1426,37 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             }
         })
 
+        // Telegram 风格自定义染色按钮：传入完全不透明的品牌色，
+        // setCustomTintColor 自动摊一层默认 alpha（约 14%）——玻璃还是玻璃，
+        // 只是带上了自己的颜色。点一下在「品牌色」和「恢复默认染色（clearCustomTint）」间切换，
+        // 同时演示 setCustomTintColor 与 clearCustomTint。
+        root.addView(LiquidGlassButton(this).apply {
+            enableDynamicBackground = true
+            text = getString(R.string.widgets_button_custom_tint)
+            setTextColor(Color.WHITE)  // 品牌色不随背景明暗翻转，固定白字保证可读
+            var tinted = true
+            setOnClickListener {
+                tinted = !tinted
+                if (tinted) {
+                    setCustomTintColor(Color.rgb(0x2A, 0xAB, 0xE2))  // Telegram 蓝（不透明 → 自动加默认 alpha）
+                } else {
+                    clearCustomTint()  // 恢复 Regular 自适应染色
+                }
+                Toast.makeText(
+                    this@ProfessionalDemoActivity,
+                    getString(if (tinted) R.string.widgets_toast_tint_on else R.string.widgets_toast_tint_off),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER
+                topMargin = dp(132)
+            }
+        })
+
         // 左下圆形玻璃 FAB
         root.addView(LiquidGlassFab(this).apply {
             enableDynamicBackground = true
