@@ -10,7 +10,8 @@
         app:glassMaterial="regular"
         app:bevelWidth="22dp"
         app:refractionHeight="26dp"
-        app:dispersionStrength="0.35" />
+        app:dispersionStrength="0.35"
+        app:glassTint="#4C0A84FF" />
 -->
 <resources>
     <declare-styleable name="LiquidGlassView">
@@ -34,6 +35,11 @@
         <attr name="dispersionStrength" format="float" />
         <attr name="sensorHighlight" format="boolean" />
         <attr name="adaptiveTint" format="boolean" />
+
+        <!-- 玻璃本体染色：颜色自带的 alpha 即染色强度；
+             glassTintStrength 用来单独指定强度（0-1），会覆盖颜色里的 alpha -->
+        <attr name="glassTint" format="color" />
+        <attr name="glassTintStrength" format="float" />
     </declare-styleable>
 
     <!-- 现成小部件：玻璃按钮（文字沿用 android 命名空间属性） -->

@@ -228,5 +228,21 @@
     <string name="widgets_toast_button">点击了：%1$s</string>
     <string name="widgets_toast_tab">标签：%1$s</string>
     <string name="widgets_toast_fab">点击了 FAB</string>
+
+    <!-- 染色场景（彩色玻璃） -->
+    <string name="scene_tint">染色</string>
+    <string name="tint_scene_hint">选个颜色、拖一下强度，就是一句 glassTint。</string>
+    <string name="tint_readout">%1$s · %2$s · %3$d%%</string>
+    <string name="tint_readout_none">未染色 · glassTint = 0</string>
+    <string name="tint_preset_hint">下面三个是固定颜色的玻璃按钮，点一下把颜色抄给主玻璃</string>
+    <string name="tint_none">无</string>
+    <string name="tint_blue">蓝</string>
+    <string name="tint_cyan">青</string>
+    <string name="tint_green">绿</string>
+    <string name="tint_yellow">黄</string>
+    <string name="tint_orange">橙</string>
+    <string name="tint_red">红</string>
+    <string name="tint_pink">粉</string>
+    <string name="tint_purple">紫</string>
 </resources>
 

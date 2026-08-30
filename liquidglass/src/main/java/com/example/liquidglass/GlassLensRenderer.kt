@@ -11,7 +11,7 @@
  *     → 色散（三通道折射率不同 → 边缘光谱边纹）
  *     → 镜面高光（dot(N, L)，光源方向由重力传感器驱动）
  *     → 内阴影（背光侧，制造厚度）
- *     → 自适应染色 / Clear 压暗层 / 饱和度
+ *     → 自适应染色 / Clear 压暗层 / 本体染色（glassTint）/ 饱和度
  *
  * 管线：backdrop 录制（带外扩边距）→ RenderEffect 模糊 → 本着色器 → 输出。
  * 形状覆盖率由 SDF 抗锯齿输出（形状外 alpha=0），无需 canvas 裁剪。
@@ -65,6 +65,7 @@ internal class GlassLensRenderer {
             uniform float  innerShadow;
             uniform float4 tintColor;
             uniform float  adaptiveTint;
+            uniform float4 glassTint;
             uniform float  dimAmount;
             uniform float  satFactor;
             uniform float  press;
@@ -183,6 +184,16 @@ internal class GlassLensRenderer {
                 }
                 col = col * (1.0 - dimAmount);
 
+                // 使用方指定的玻璃本体色：按"有色介质"建模——吸收（保留背景明暗
+                // 层次与折射细节）+ 少量散射（暗背景下也看得出色相）。
+                // 位置在光照之前：染色属于透射，镜面高光属于表面反射，不该被染色
+                if (glassTint.a > 0.002) {
+                    float lumTint = dot(col, float3(0.2126, 0.7152, 0.0722));
+                    float3 absorbed = col * mix(float3(1.0), glassTint.rgb, 0.85);
+                    float3 scattered = glassTint.rgb * (0.38 * (1.0 - lumTint));
+                    col = mix(col, clamp(absorbed + scattered, float3(0.0), float3(1.0)), glassTint.a);
+                }
+
                 // 光照：同一法线场驱动。高光集中在贴边窄带（宽度与斜面弱相关，
                 // 上限 9px），角度瓣收紧（pow 5）——避免大斜面时出现大面积泛白光斑
                 float facing = dot(n, -lightDir);
@@ -229,6 +240,7 @@ internal class GlassLensRenderer {
         val innerShadow: Float,
         val tint: Int,          // straight-alpha ARGB（adaptiveTint 时被忽略）
         val adaptiveTint: Boolean, // 逐像素自适应染色（Regular + enableAdaptiveTint）
+        val glassTint: Int,     // 使用方指定的玻璃本体色（straight-alpha ARGB，a=0 关闭）
         val dim: Float,
         val saturation: Float,  // 100 = 原始
         val press: Float,
@@ -360,6 +372,13 @@ internal class GlassLensRenderer {
             Color.alpha(p.tint) / 255f
         )
         sh.setFloatUniform("adaptiveTint", if (p.adaptiveTint) 1f else 0f)
+        sh.setFloatUniform(
+            "glassTint",
+            Color.red(p.glassTint) / 255f,
+            Color.green(p.glassTint) / 255f,
+            Color.blue(p.glassTint) / 255f,
+            Color.alpha(p.glassTint) / 255f
+        )
         sh.setFloatUniform("dimAmount", p.dim)
         sh.setFloatUniform("satFactor", p.saturation / 100f)
         sh.setFloatUniform("press", p.press)

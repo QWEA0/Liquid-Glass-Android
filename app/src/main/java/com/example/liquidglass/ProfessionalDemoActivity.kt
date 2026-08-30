@@ -78,7 +78,8 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         SHEET(R.string.scene_sheet),
         TEXT(R.string.scene_text),
         SHOWCASE(R.string.scene_showcase),
-        WIDGETS(R.string.scene_widgets)
+        WIDGETS(R.string.scene_widgets),
+        TINT(R.string.scene_tint)
     }
 
     private var currentScene = Scene.SCROLL
@@ -149,6 +150,19 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         private const val COLOR_TEXT_DIM = 0xFF8E8E93.toInt() // 次要文字
         private const val COLOR_ACCENT = 0xFF007AFF.toInt()   // 强调色
         private const val COLOR_SEG_BG = 0xFFE9E9EB.toInt()   // 分段控件底
+
+        /** TINT 场景的色板（名称 + 色相，取 iOS 系统色）；第一项是"取消染色" */
+        private val TINT_SWATCHES = listOf(
+            R.string.tint_none to Color.TRANSPARENT,
+            R.string.tint_blue to 0xFF0A84FF.toInt(),
+            R.string.tint_cyan to 0xFF32ADE6.toInt(),
+            R.string.tint_green to 0xFF30D158.toInt(),
+            R.string.tint_yellow to 0xFFFFD60A.toInt(),
+            R.string.tint_orange to 0xFFFF9F0A.toInt(),
+            R.string.tint_red to 0xFFFF453A.toInt(),
+            R.string.tint_pink to 0xFFFF375F.toInt(),
+            R.string.tint_purple to 0xFFBF5AF2.toInt()
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -380,6 +394,9 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         glassView.backdropSource = null
         // TEXT 场景会改软键盘模式，切走时还原
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        // TINT 场景会给共享的 glassView 染色，切走时清掉——染色是 TINT 场景的局部演示，
+        // 不该跟着跑到别的场景里去
+        glassView.glassTint = Color.TRANSPARENT
         // SHEET 场景的弹层在独立 window 里，不随 sceneHost 的清空而消失
         dismissGlassBottomSheet()
 
@@ -394,6 +411,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             Scene.TEXT -> buildTextScene()
             Scene.SHOWCASE -> buildShowcaseScene()
             Scene.WIDGETS -> buildWidgetsScene()
+            Scene.TINT -> buildTintScene()
         }
         sceneHost.addView(root)
         updateSceneBar()
@@ -1451,6 +1469,237 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         return root
     }
 
+    /**
+     * 场景 11：彩色玻璃（glassTint）
+     *
+     * 上面的色板和强度滑杆直接改主玻璃的 glassTint，下面三个按钮各自钉死一种颜色——
+     * 一屏之内就能看出"同样的玻璃，不同的颜色"。
+     * 背景照旧用壁纸 + 图标网格：染色玻璃的通透感只有在高频背景上才成立，
+     * 铺一块纯色的话它看起来就只是一层半透明色板。
+     */
+    private fun buildTintScene(): View {
+        val root = FrameLayout(this)
+
+        // 玻璃捕获的是直接父容器，色板/滑杆挂在 stage 外面，免得被折射进玻璃里
+        val stage = FrameLayout(this)
+        root.addView(stage, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        stage.addView(ImageView(this).apply {
+            setImageResource(R.drawable.ios_wallpaper)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+        stage.addView(HomeScreenGridView(this), FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        // 主玻璃：色板 + 强度滑杆都作用在它身上
+        glassView.layoutParams = FrameLayout.LayoutParams(dp(300), dp(124)).apply {
+            gravity = Gravity.CENTER
+            topMargin = -dp(24)
+        }
+        stage.addView(glassView)
+
+        // 色板与强度的初值跟着主玻璃当前的染色走（切场景时 showScene 会清掉染色）
+        val current = glassView.glassTint
+        var hueRes = R.string.tint_none
+        var hue = if (Color.alpha(current) == 0) Color.TRANSPARENT else current or 0xFF000000.toInt()
+        var strength = if (Color.alpha(current) == 0) 0.30f else Color.alpha(current) / 255f
+        TINT_SWATCHES.firstOrNull { it.second == hue }?.let { hueRes = it.first }
+
+        val readout = TextView(this).apply {
+            textSize = 13f
+            typeface = Typeface.MONOSPACE
+            setTextColor(0xFF4CFF7A.toInt())
+            setPadding(0, dp(8), 0, dp(2))
+        }
+        fun refreshReadout() {
+            readout.text = if (hue == Color.TRANSPARENT) {
+                getString(R.string.tint_readout_none)
+            } else {
+                getString(
+                    R.string.tint_readout,
+                    getString(hueRes),
+                    "#%06X".format(hue and 0xFFFFFF),
+                    (strength * 100).toInt()
+                )
+            }
+        }
+        fun applyTint() {
+            applyGlass {
+                if (hue == Color.TRANSPARENT) it.glassTint = Color.TRANSPARENT
+                else it.setGlassTint(hue, strength)
+            }
+            refreshReadout()
+        }
+
+        val (swatchRow, selectSwatch) = buildTintSwatchRow { labelRes, color ->
+            hueRes = labelRes
+            hue = color
+            applyTint()
+        }
+        selectSwatch(hue)
+
+        // 固定颜色的玻璃按钮：一屏之内摆三种颜色。
+        // 必须直接挂在 stage 下——玻璃捕获直接父容器，套一层 LinearLayout 的话，
+        // 兄弟玻璃互相捕获时会重入这层容器的 display list（beginRecording 直接抛
+        // "Recording currently in progress"）。所以横向排布靠 FrameLayout 的
+        // 居中 gravity + 左右外边距偏移来做
+        listOf(
+            Triple(R.string.tint_pink, 0xFFFF375F.toInt(), -dp(108)),
+            Triple(R.string.tint_green, 0xFF30D158.toInt(), 0),
+            Triple(R.string.tint_purple, 0xFFBF5AF2.toInt(), dp(108))
+        ).forEach { (labelRes, color, offsetX) ->
+            stage.addView(LiquidGlassButton(this).apply {
+                enableDynamicBackground = true
+                text = getString(labelRes)
+                setTextSize(13f)
+                // 库默认的折射/斜面是按大块玻璃调的，落在这种小胶囊上整块都是边缘带，
+                // 背景被压缩得比染色还抢眼；缩小两个数值留出平坦的中心区，颜色才读得出来
+                refractionHeight = 90f
+                bevelWidth = 24f
+                // 固定 50%——这几个按钮是拿来对比色相的，强度统一、给足才看得出差别
+                setGlassTint(color, 0.5f)
+                setOnClickListener {
+                    hueRes = labelRes
+                    hue = color
+                    strength = 0.5f
+                    selectSwatch(color)
+                    applyTint()
+                }
+                layoutParams = FrameLayout.LayoutParams(dp(100), dp(76)).apply {
+                    gravity = Gravity.CENTER
+                    topMargin = dp(136)
+                    if (offsetX < 0) rightMargin = -offsetX else leftMargin = offsetX
+                }
+            })
+        }
+
+        // 控制条：色板 + 强度滑杆（在 stage 外，不参与背景捕获）
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                cornerRadius = dpF(18)
+                setColor(0x8C000000.toInt())
+            }
+            setPadding(dp(16), dp(12), dp(16), dp(10))
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.TOP
+                topMargin = systemBarTop + dp(58)  // 让开状态栏 + 性能悬浮窗
+                marginStart = dp(16)
+                marginEnd = dp(16)
+            }
+        }
+        controls.addView(TextView(this).apply {
+            text = getString(R.string.tint_scene_hint)
+            textSize = 12f
+            setTextColor(0xCCFFFFFF.toInt())
+        })
+        // 色板一行放不下就横向滚动（窄屏 + 9 个色块）
+        controls.addView(HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(swatchRow)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(10) }
+        })
+        controls.addView(readout)
+        controls.addView(SeekBar(this).apply {
+            max = 100
+            progress = (strength * 100).toInt()
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
+                    if (!fromUser) return
+                    strength = p / 100f
+                    // 还没选色就拖强度：默认给蓝色，否则滑杆看着像坏了
+                    if (hue == Color.TRANSPARENT) {
+                        hueRes = R.string.tint_blue
+                        hue = 0xFF0A84FF.toInt()
+                        selectSwatch(hue)
+                    }
+                    applyTint()
+                }
+                override fun onStartTrackingTouch(sb: SeekBar?) {}
+                override fun onStopTrackingTouch(sb: SeekBar?) {}
+            })
+        })
+        controls.addView(TextView(this).apply {
+            text = getString(R.string.tint_preset_hint)
+            textSize = 11f
+            setTextColor(0x99FFFFFF.toInt())
+            setPadding(0, dp(6), 0, 0)
+        })
+        root.addView(controls)
+
+        applyTint()
+        return root
+    }
+
+    /**
+     * 圆形色板行
+     *
+     * @return 行视图 + 一个"按颜色回选"的回调（点固定色按钮时用来同步选中态）
+     */
+    private fun buildTintSwatchRow(
+        onPick: (labelRes: Int, color: Int) -> Unit
+    ): Pair<View, (Int) -> Unit> {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val dots = mutableListOf<View>()
+        var selected = 0
+
+        fun render() {
+            dots.forEachIndexed { i, dot ->
+                val color = TINT_SWATCHES[i].second
+                dot.background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    // "无染色"没有颜色可画，给一块半透明白当占位
+                    setColor(if (color == Color.TRANSPARENT) 0x33FFFFFF else color)
+                    setStroke(
+                        dp(if (i == selected) 3 else 1),
+                        if (i == selected) Color.WHITE else 0x66FFFFFF
+                    )
+                }
+            }
+        }
+
+        TINT_SWATCHES.forEachIndexed { i, (labelRes, color) ->
+            val dot = View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(dp(32), dp(32)).apply {
+                    setMargins(0, 0, dp(10), 0)
+                }
+                setOnClickListener {
+                    selected = i
+                    render()
+                    onPick(labelRes, color)
+                }
+            }
+            dots += dot
+            row.addView(dot)
+        }
+        render()
+
+        return row to { color: Int ->
+            val idx = TINT_SWATCHES.indexOfFirst { it.second == color }
+            if (idx >= 0 && idx != selected) {
+                selected = idx
+                render()
+            }
+        }
+    }
+
     /** 创建随主 glassView 参数同步的附属玻璃组件 */
     private fun newExtraGlass(cornerRadiusPx: Float): LiquidGlassView {
         val view = LiquidGlassView(this).apply {
@@ -1474,6 +1723,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         target.dispersionStrength = src.dispersionStrength
         target.enableSensorHighlight = src.enableSensorHighlight
         target.enableAdaptiveTint = src.enableAdaptiveTint
+        target.glassTint = src.glassTint
         target.accessibilityMode = src.accessibilityMode
         target.enablePressEffect = src.enablePressEffect
         target.pressScale = src.pressScale

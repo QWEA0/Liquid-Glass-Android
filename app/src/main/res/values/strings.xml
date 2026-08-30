@@ -228,5 +228,21 @@
     <string name="widgets_toast_button">Clicked: %1$s</string>
     <string name="widgets_toast_tab">Tab: %1$s</string>
     <string name="widgets_toast_fab">FAB clicked</string>
+
+    <!-- Tint Scene (coloured glass) -->
+    <string name="scene_tint">Tint</string>
+    <string name="tint_scene_hint">Pick a colour, drag the strength — that is one glassTint call.</string>
+    <string name="tint_readout">%1$s · %2$s · %3$d%%</string>
+    <string name="tint_readout_none">No tint · glassTint = 0</string>
+    <string name="tint_preset_hint">Fixed-tint glass buttons — tap one to copy its colour</string>
+    <string name="tint_none">None</string>
+    <string name="tint_blue">Blue</string>
+    <string name="tint_cyan">Cyan</string>
+    <string name="tint_green">Green</string>
+    <string name="tint_yellow">Yellow</string>
+    <string name="tint_orange">Orange</string>
+    <string name="tint_red">Red</string>
+    <string name="tint_pink">Pink</string>
+    <string name="tint_purple">Purple</string>
 </resources>
 

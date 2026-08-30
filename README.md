@@ -220,6 +220,10 @@ glass.dispersionStrength = 0.10f            // rim spectral fringe, 0-1. >0.25 r
 glass.enableSensorHighlight = true          // highlight tracks device tilt
 glass.enableAdaptiveTint = true             // tint follows backdrop luminance
 
+// --- Coloured glass (all pipelines, API 24+) ---
+glass.glassTint = 0x4C0A84FF                // ARGB; the alpha IS the strength
+glass.setGlassTint(Color.MAGENTA, 0.25f)    // or give hue and strength separately
+
 // Flip your foreground colour when the backdrop goes light/dark
 glass.glassAppearanceListener = { isOverLight ->
     label.setTextColor(if (isOverLight) Color.BLACK else Color.WHITE)
@@ -251,6 +255,7 @@ pipeline; below API 33 they are accepted and silently ignored — no exception i
 | `dispersionStrength` | Float | `0.10f` | 0–1 | **33+** Rim spectral fringe. Above ~0.25 reads as rainbow |
 | `enableSensorHighlight` | Boolean | `false` | — | **33+** Specular follows device tilt (gravity sensor) |
 | `enableAdaptiveTint` | Boolean | `false` | — | **33+** Tint adapts to backdrop luminance |
+| `glassTint` | Int (ARGB) | `TRANSPARENT` | — | Colour of the glass itself; the colour's alpha is the strength. `0x33`–`0x66` reads like iOS tinted glass, `0xFF` like stained glass. Works on every pipeline |
 | `useShaderPipeline` | Boolean | `true` | — | `false` forces the classic pipeline even on 33+ |
 | `useHardwareBlurWhenPossible` | Boolean | `true` | — | `false` also disables the lens pipeline, not just hardware blur |
 | `debugApiLevelCap` | Int | `MAX_VALUE` | API level | Debug only: clamp the pipeline tier to preview older devices (36 AGSL extras / 33 lens / 31 classic GPU / below = CPU) |
@@ -282,6 +287,7 @@ Declared under the `LiquidGlassView` styleable, namespace `app`:
 `displacementScale` · `blurAmount` · `saturation` · `aberrationIntensity` · `elasticity` ·
 `cornerRadius` (dimension) · `glassMaterial` (`regular` | `clear`) · `bevelWidth` (dimension) ·
 `refractionHeight` (dimension) · `dispersionStrength` · `sensorHighlight` · `adaptiveTint` ·
+`glassTint` (color) · `glassTintStrength` (float 0–1, overrides the alpha in `glassTint`) ·
 `backdropSourceId` (reference — id of the backdrop view; omit for the direct parent)
 
 #### Enum values
@@ -301,6 +307,7 @@ Exact spelling — invented constants are the usual cause of a failed build.
 |---|---|
 | `setPrimaryShape(rect: RectF?, cornerRadiusPx: Float = cornerRadius)` | `null` = use the whole view |
 | `setSecondaryShape(rect: RectF?, cornerRadiusPx: Float = 999f, smoothing: Float = 48f)` | **33+** Two shapes blend with smooth-min, like mercury |
+| `setGlassTint(color: Int, strength: Float)` | Colour the glass; `strength` 0–1 replaces the alpha carried by `color` |
 | `setBackdropSource(source: View?)` | Capture any view instead of the direct parent — free of the hierarchy, **keeps the GPU pipeline** |
 | `setCustomBackdropCapture(capture: (RectF) -> Bitmap?)` | Supply your own backdrop bitmap. Forces the CPU pipeline — prefer `setBackdropSource` |
 | `refreshAccessibilityState()` | Re-read system accessibility settings |
@@ -656,6 +663,10 @@ glass.dispersionStrength = 0.10f            // 边缘色散，0-1。超过 0.25 
 glass.enableSensorHighlight = true          // 高光跟随设备倾斜
 glass.enableAdaptiveTint = true             // 染色跟随背景明暗
 
+// --- 彩色玻璃（全部管线通用，API 24+）---
+glass.glassTint = 0x4C0A84FF                // ARGB，alpha 就是染色强度
+glass.setGlassTint(Color.MAGENTA, 0.25f)    // 或者色相与强度分开给
+
 // 背景明暗翻转时切换前景色
 glass.glassAppearanceListener = { isOverLight ->
     label.setTextColor(if (isOverLight) Color.BLACK else Color.WHITE)
@@ -687,6 +698,7 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 | `dispersionStrength` | Float | `0.10f` | 0–1 | **33+** 边缘色散。超过 0.25 会像彩虹 |
 | `enableSensorHighlight` | Boolean | `false` | — | **33+** 高光跟随重力传感器 |
 | `enableAdaptiveTint` | Boolean | `false` | — | **33+** 染色跟随背景亮度 |
+| `glassTint` | Int (ARGB) | `TRANSPARENT` | — | 玻璃本体颜色，颜色自带的 alpha 即染色强度。`0x33`–`0x66` 接近 iOS 的彩色玻璃，`0xFF` 是浓重的有色玻璃。全部管线通用 |
 | `useShaderPipeline` | Boolean | `true` | — | 设 `false` 可在 33+ 上强制走经典管线 |
 | `useHardwareBlurWhenPossible` | Boolean | `true` | — | 设 `false` 会连透镜管线一起关掉，不只是硬件模糊 |
 | `debugApiLevelCap` | Int | `MAX_VALUE` | API 级别 | 仅调试：钳制管线分层，预览低版本效果（36 AGSL 增强 / 33 透镜 / 31 经典 GPU / 以下 CPU） |
@@ -718,6 +730,7 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 `displacementScale` · `blurAmount` · `saturation` · `aberrationIntensity` · `elasticity` ·
 `cornerRadius`（dimension） · `glassMaterial`（`regular` | `clear`） · `bevelWidth`（dimension） ·
 `refractionHeight`（dimension） · `dispersionStrength` · `sensorHighlight` · `adaptiveTint` ·
+`glassTint`（color） · `glassTintStrength`（float 0–1，覆盖 `glassTint` 里的 alpha） ·
 `backdropSourceId`（reference —— 背景来源视图的 id，不填 = 直接父容器）
 
 #### 枚举值
@@ -737,6 +750,7 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 |---|---|
 | `setPrimaryShape(rect: RectF?, cornerRadiusPx: Float = cornerRadius)` | 传 `null` = 使用整个视图 |
 | `setSecondaryShape(rect: RectF?, cornerRadiusPx: Float = 999f, smoothing: Float = 48f)` | **33+** 双形状 smin 黏连合并 |
+| `setGlassTint(color: Int, strength: Float)` | 给玻璃染色，`strength` 0–1 取代 `color` 自带的 alpha |
 | `setBackdropSource(source: View?)` | 捕获指定视图而非直接父容器，摆脱层级约束，**保留 GPU 管线** |
 | `setCustomBackdropCapture(capture: (RectF) -> Bitmap?)` | 自己提供背景位图。会强制回退 CPU 管线，优先用 `setBackdropSource` |
 | `refreshAccessibilityState()` | 重新读取系统无障碍设置 |

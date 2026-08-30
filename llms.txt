@@ -71,7 +71,9 @@ sibling placed after the background content in a `FrameLayout` (or any overlappi
         app:glassMaterial="regular"
         app:refractionHeight="66dp"
         app:bevelWidth="14dp"
-        app:dispersionStrength="0.12">
+        app:dispersionStrength="0.12"
+        app:glassTint="#0A84FF"
+        app:glassTintStrength="0.3">
 
         <TextView
             android:layout_width="match_parent"
@@ -128,6 +130,13 @@ Wrong enum constants are the usual cause of a failed build. These are the only v
 - `LiquidGlassView.setPrimaryShape(rect: RectF?, cornerRadiusPx: Float)`
 - `LiquidGlassView.setSecondaryShape(rect: RectF?, cornerRadiusPx: Float, smoothing: Float)`
   — two shapes blend with a smooth-min, producing the mercury-like merge. API 33+.
+- `LiquidGlassView.glassTint: Int` — colour of the glass itself, straight-alpha ARGB; the
+  alpha IS the tint strength and `0` (the default) means no tint. `0x33`–`0x66` reads like
+  iOS tinted glass, `0xFF` like stained glass. Works on every pipeline (API 24+), composes
+  with `material` and `enableAdaptiveTint`. XML: `app:glassTint` plus the optional
+  `app:glassTintStrength` (0–1) when you would rather not encode strength in the alpha.
+- `LiquidGlassView.setGlassTint(color: Int, strength: Float)` — same thing with hue and
+  strength passed separately; the alpha carried by `color` is ignored.
 - `LiquidGlassView.glassAppearanceListener: ((isOverLight: Boolean) -> Unit)?` — fires when
   the backdrop luminance flips; use it to switch your foreground text between light and dark.
 - `LiquidGlassView.backdropSource: View?` — which view to capture as the backdrop. `null`

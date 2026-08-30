@@ -7,6 +7,7 @@
  * - 背景模糊和饱和度调整
  * - 边缘扭曲效果
  * - 色差效果
+ * - 玻璃本体染色（glassTint：传入颜色即可做出各种颜色的玻璃）
  * - 触摸交互和弹性动画
  * - 阴影效果（可选）
  *
@@ -20,7 +21,9 @@
  *     app:saturation="140"
  *     app:aberrationIntensity="2"
  *     app:elasticity="0.15"
- *     app:cornerRadius="999" />
+ *     app:cornerRadius="999"
+ *     app:glassTint="#0A84FF"
+ *     app:glassTintStrength="0.3" />
  * ```
  */
 package com.example.liquidglass
@@ -389,6 +392,44 @@ open class LiquidGlassView @JvmOverloads constructor(
                 invalidate()
             }
         }
+
+    /**
+     * 玻璃本体颜色（straight-alpha ARGB，alpha 即染色强度；默认全透明 = 不染色）
+     *
+     * 透镜管线按"有色介质"处理——吸收 + 少量散射：背景的明暗层次、折射与色散细节
+     * 全部保留，不会退成一层半透明色板。回退管线（API 31/32 与 CPU）用同色覆盖层
+     * 近似，色相一致，但 alpha 越高差别越大——0xFF 在回退路径上就是一块实色。
+     *
+     * 与 [material] / [enableAdaptiveTint] 叠加：自适应染色仍负责可读性，这里只加色相。
+     *
+     * 强度参考：0x33–0x66（20%–40%）接近 iOS 的彩色玻璃；0xFF 是浓重的有色玻璃。
+     * 只想给颜色、强度另外给的话用 [setGlassTint]。
+     *
+     * ```kotlin
+     * glass.glassTint = 0x4C0A84FF          // 30% 强度的蓝
+     * glass.setGlassTint(Color.MAGENTA, 0.25f)
+     * ```
+     */
+    var glassTint: Int = Color.TRANSPARENT
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
+    /**
+     * 设置玻璃本体颜色并单独指定强度（忽略 [color] 自带的 alpha）
+     *
+     * @param color 染色色相，alpha 分量被忽略
+     * @param strength 染色强度 0-1（0 = 不染色）
+     */
+    fun setGlassTint(color: Int, strength: Float) {
+        glassTint = Color.argb(
+            (strength.coerceIn(0f, 1f) * 255f).roundToInt(),
+            Color.red(color), Color.green(color), Color.blue(color)
+        )
+    }
 
     /** 无障碍渲染模式（AUTO 跟随系统「高对比度文字」自动退化为不透明材质） */
     var accessibilityMode = GlassAccessibilityMode.AUTO
@@ -775,6 +816,12 @@ open class LiquidGlassView @JvmOverloads constructor(
             dispersionStrength = ta.getFloat(R.styleable.LiquidGlassView_dispersionStrength, dispersionStrength)
             enableSensorHighlight = ta.getBoolean(R.styleable.LiquidGlassView_sensorHighlight, enableSensorHighlight)
             enableAdaptiveTint = ta.getBoolean(R.styleable.LiquidGlassView_adaptiveTint, enableAdaptiveTint)
+            glassTint = ta.getColor(R.styleable.LiquidGlassView_glassTint, glassTint)
+            // 单独给了强度就覆盖颜色自带的 alpha（app:glassTint="#0A84FF" 这种写法
+            // 解析出来 alpha 是 255，不给个强度旋钮就只能是最浓的一档）
+            if (ta.hasValue(R.styleable.LiquidGlassView_glassTintStrength)) {
+                setGlassTint(glassTint, ta.getFloat(R.styleable.LiquidGlassView_glassTintStrength, 1f))
+            }
             material = if (ta.getInt(R.styleable.LiquidGlassView_glassMaterial, 0) == 1) {
                 GlassMaterial.CLEAR
             } else {
@@ -1028,6 +1075,7 @@ open class LiquidGlassView @JvmOverloads constructor(
 
         // ✅ API 31+ 旧 GPU 快速路径（模糊+饱和度，零拷贝）
         if (tryDrawHardwareBlur(canvas, calculatedBlurRadius)) {
+            drawGlassTintOverlay(canvas)
             if (enableEdgeHighlight) {
                 drawEdgeHighlight(canvas, bounds)
             }
@@ -1084,6 +1132,7 @@ open class LiquidGlassView @JvmOverloads constructor(
                         canvas.drawPath(clipPath, tintOverlayPaint)
                     }
                 }
+                drawGlassTintOverlay(canvas)
 
                 canvas.restoreToCount(saveCount)
             }
@@ -1197,6 +1246,7 @@ open class LiquidGlassView @JvmOverloads constructor(
             innerShadow = material.innerShadow,
             tint = if (adaptivePerPixel) 0 else currentTintColor(),
             adaptiveTint = adaptivePerPixel,
+            glassTint = glassTint,
             dim = material.dimAmount,
             saturation = saturation,
             press = press,
@@ -1236,6 +1286,19 @@ open class LiquidGlassView @JvmOverloads constructor(
     private fun computeLensMargin(blurRadius: Float): Int {
         val need = max(blurRadius * 3f, 32f)
         return (((need.toInt() + 15) / 16) * 16).coerceAtLeast(32)
+    }
+
+    /**
+     * 回退管线（旧 GPU / CPU）的本体染色覆盖层
+     *
+     * 透镜着色器里的"吸收 + 散射"这里用同色平涂近似：色相与强度一致，
+     * 暗部层次会比透镜管线平一些。
+     */
+    private fun drawGlassTintOverlay(canvas: Canvas) {
+        val tint = glassTint
+        if (Color.alpha(tint) == 0) return
+        tintOverlayPaint.color = tint
+        canvas.drawPath(clipPath, tintOverlayPaint)
     }
 
     /**
@@ -1331,12 +1394,28 @@ open class LiquidGlassView @JvmOverloads constructor(
      */
     private fun drawOpaqueFallback(canvas: Canvas) {
         val over = isOverLightBackground
-        opaquePaint.color = if (over) 0xFFF2F2F6.toInt() else 0xFF2A2A2E.toInt()
+        val base = if (over) 0xFFF2F2F6.toInt() else 0xFF2A2A2E.toInt()
+        // 染色过的玻璃降级后仍保留色相，否则一开「减少透明度」整套配色就全灰了；
+        // 混合比例压到 0.45 以内，不让任意颜色把对比度吃掉
+        opaquePaint.color = blendOpaque(base, glassTint, Color.alpha(glassTint) / 255f * 0.45f)
         opaqueBorderPaint.color = if (over) 0x33000000 else 0x40FFFFFF
         val r = cornerRadius.coerceAtMost(min(width, height) / 2f)
         val rect = RectF(0.75f, 0.75f, width - 0.75f, height - 0.75f)
         canvas.drawRoundRect(rect, r, r, opaquePaint)
         canvas.drawRoundRect(rect, r, r, opaqueBorderPaint)
+    }
+
+    /** 把染色按比例混进不透明底色（结果恒为不透明） */
+    private fun blendOpaque(base: Int, tint: Int, ratio: Float): Int {
+        if (ratio <= 0f) return base
+        val k = ratio.coerceIn(0f, 1f)
+        fun mix(b: Int, t: Int) = (b + (t - b) * k).roundToInt().coerceIn(0, 255)
+        return Color.argb(
+            255,
+            mix(Color.red(base), Color.red(tint)),
+            mix(Color.green(base), Color.green(tint)),
+            mix(Color.blue(base), Color.blue(tint))
+        )
     }
 
     /**
