@@ -327,7 +327,7 @@ until you set an explicit color.
 | `LiquidGlassButton` | Pill glass button with a centered label. XML: `android:text`, `android:textSize`, `android:textColor`. Kotlin: `text`, `setTextColor(color)`, `textView` |
 | `LiquidGlassFab` | Circular 56dp floating button with a centered icon. XML: `android:src`, `app:glassIconTint`. Kotlin: `icon`, `setIconResource(id)`, `setIconTint(color)`, `imageView` |
 | `LiquidGlassTabBar` | iOS 26-style tab bar: icon-over-label tabs, selection indicator is a real glass droplet that refracts the content under it, slides with liquid stretch and is finger-draggable. Kotlin: `setTabs(List<TabItem>)` / `setTabs(titles)`, `selectedIndex`, `onTabSelected`, `selectedTintColor`. XML: `app:glassTabEntries` (text-only) |
-| `LiquidGlassDialogBuilder` | `MaterialAlertDialogBuilder` whose whole panel is wrapped in a `LiquidGlassView`. Backdrop is captured from the activity behind, title/message/buttons follow the adaptive light-dark switch. Kotlin: `cornerRadiusDp`, `glassBlurAmount`, `animateShow`, `dimBehind`, `glassSetup`, `glass`, `dismissAnimated()`. Requires the app to depend on appcompat + material (the library keeps them `compileOnly`) |
+| `LiquidGlassDialogBuilder` | `MaterialAlertDialogBuilder` whose whole panel is wrapped in a `LiquidGlassView`. Backdrop is captured from the activity behind, title/message/buttons follow the adaptive light-dark switch. Kotlin: `cornerRadiusDp`, `glassBlurAmount`, `animateShow`, `dimBehind`, `glassSetup`, `glass`, `dismissAnimated()`. Java: `configureGlass(GlassConfigurator)` is the SAM-friendly stand-in for `glassSetup`; `overLightTextColor` / `overDarkTextColor` override the adaptive text colours. Requires the app to depend on appcompat + material (the library keeps them `compileOnly`) |
 
 See [docs/LIQUID_GLASS_V2.md](docs/LIQUID_GLASS_V2.md) for the full lens-pipeline documentation.
 
@@ -768,7 +768,7 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 | `LiquidGlassButton` | 胶囊玻璃按钮，居中文字。XML：`android:text`、`android:textSize`、`android:textColor`。Kotlin：`text`、`setTextColor(color)`、`textView` |
 | `LiquidGlassFab` | 圆形 56dp 悬浮按钮，居中图标。XML：`android:src`、`app:glassIconTint`。Kotlin：`icon`、`setIconResource(id)`、`setIconTint(color)`、`imageView` |
 | `LiquidGlassTabBar` | iOS 26 风格标签条：图标+小字标签，选中指示是一颗真实玻璃滴（折射下方内容），切换带液态拉伸动画、可手指拖拽吸附。Kotlin：`setTabs(List<TabItem>)` / `setTabs(titles)`、`selectedIndex`、`onTabSelected`、`selectedTintColor`。XML：`app:glassTabEntries`（纯文字） |
-| `LiquidGlassDialogBuilder` | 把 `MaterialAlertDialogBuilder` 的整个面板套进 `LiquidGlassView`。背景从后面的 Activity 采，标题/正文/按钮跟随明暗自适应切换。Kotlin：`cornerRadiusDp`、`glassBlurAmount`、`animateShow`、`dimBehind`、`glassSetup`、`glass`、`dismissAnimated()`。使用方需自行依赖 appcompat + material（库里是 `compileOnly`） |
+| `LiquidGlassDialogBuilder` | 把 `MaterialAlertDialogBuilder` 的整个面板套进 `LiquidGlassView`。背景从后面的 Activity 采，标题/正文/按钮跟随明暗自适应切换。Kotlin：`cornerRadiusDp`、`glassBlurAmount`、`animateShow`、`dimBehind`、`glassSetup`、`glass`、`dismissAnimated()`。Java：`configureGlass(GlassConfigurator)` 是 `glassSetup` 的 SAM 接口版本；`overLightTextColor` / `overDarkTextColor` 可覆盖自适应文字色。使用方需自行依赖 appcompat + material（库里是 `compileOnly`） |
 
 完整透镜管线文档见 [docs/LIQUID_GLASS_V2.md](docs/LIQUID_GLASS_V2.md)。
 

@@ -186,7 +186,9 @@ Wrong enum constants are the usual cause of a failed build. These are the only v
   recoloured by the adaptive light/dark switch. Constructor: `themeResId`, `cornerRadiusDp`
   (28), `glassBlurAmount` (0.6 — the `LiquidGlassView` default of 0.0625 is far too weak for
   a panel this large), `animateShow`, `dimBehind`, `glassSetup: (LiquidGlassView.() -> Unit)?`
-  for any further glass tuning. Exposes `glass` and `dismissAnimated()` (scale-down exit).
+  for any further glass tuning; Java callers use `configureGlass(GlassConfigurator)` instead,
+  a SAM interface invoked at the same point. Exposes `glass`, `dismissAnimated()` (scale-down
+  exit) and `overLightTextColor` / `overDarkTextColor` for overriding the adaptive text colours.
   The library declares appcompat + material as `compileOnly`, so an app using this class must
   depend on them itself.
 
