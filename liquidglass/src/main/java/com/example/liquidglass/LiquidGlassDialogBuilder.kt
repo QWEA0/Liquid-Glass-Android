@@ -24,6 +24,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -136,7 +137,7 @@ class LiquidGlassDialogBuilder @JvmOverloads constructor(
             enableAdaptiveTint = true
             blurAmount = glassBlurAmount
             backdropSource = context.findActivity()?.findViewById(android.R.id.content)
-            layoutParams = originalLp
+            layoutParams = buildGlassLayoutParams(content, originalLp)
             alpha = if (animateShow) 0f else 1f
             scaleX = if (animateShow) ENTER_SCALE else 1f
             scaleY = if (animateShow) ENTER_SCALE else 1f
@@ -167,6 +168,31 @@ class LiquidGlassDialogBuilder @JvmOverloads constructor(
         // 自适应染色要等亮度采样跑完才回调，先按当前判定上一次色，避免首帧是主题色
         applyTextColors(panel, glassView.isOverLightBackground)
         runEnterAnimation()
+    }
+
+    /**
+     * 玻璃卡片的宽度收在 [MAX_WIDTH_DP] 以内并居中：面板原有的 layoutParams 多是 match_parent，
+     * 直接沿用的话平板和横屏上玻璃会被拉成整屏宽，不像 Material 弹窗。
+     * 边距沿用面板原有的，可用宽度要先把左右边距扣掉，避免窄屏上撑出去
+     */
+    private fun buildGlassLayoutParams(
+        content: ViewGroup,
+        originalLp: ViewGroup.LayoutParams?
+    ): FrameLayout.LayoutParams {
+        val maxWidthPx = (MAX_WIDTH_DP * context.resources.displayMetrics.density).toInt()
+        val margins = originalLp as? ViewGroup.MarginLayoutParams
+        val parentWidth = content.measuredWidth.takeIf { it > 0 }
+            ?: content.width.takeIf { it > 0 }
+            ?: maxWidthPx
+        val available = parentWidth - (margins?.leftMargin ?: 0) - (margins?.rightMargin ?: 0)
+        return FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            margins?.let { setMargins(it.leftMargin, it.topMargin, it.rightMargin, it.bottomMargin) }
+            width = minOf(maxWidthPx, available.coerceAtLeast(1))
+            gravity = Gravity.CENTER
+        }
     }
 
     private fun runEnterAnimation() {
@@ -235,5 +261,8 @@ class LiquidGlassDialogBuilder @JvmOverloads constructor(
         /** 半径 ≈ 4 + 0.6 × 32 ≈ 23px，弹窗这么大一块要这个量级才糊得住背景细节 */
         const val DEFAULT_BLUR = 0.6f
         const val OVER_LIGHT_TEXT = 0xDE000000.toInt()
+
+        /** 玻璃卡片的最大宽度，与 Material 弹窗在大屏上的宽度上限保持一致 */
+        const val MAX_WIDTH_DP = 380f
     }
 }
