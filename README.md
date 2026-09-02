@@ -508,6 +508,7 @@ Inspired by the glassmorphism design trend and liquid-glass-react library.
 <p align="center">
   <img src="assets/hero-lens-detail.jpg" alt="边缘压缩环与色散彩边（1:1 像素）" width="820">
 </p>
+
 ### ✨ 特性
 
 **Liquid Glass 2.0（API 33+，单 pass AGSL 透镜管线）**
