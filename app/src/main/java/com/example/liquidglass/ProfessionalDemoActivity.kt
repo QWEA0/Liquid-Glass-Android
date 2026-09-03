@@ -80,7 +80,8 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         SHOWCASE(R.string.scene_showcase),
         WIDGETS(R.string.scene_widgets),
         GROUP(R.string.scene_group),
-        TINT(R.string.scene_tint)
+        TINT(R.string.scene_tint),
+        NESTED(R.string.scene_nested)
     }
 
     private var currentScene = Scene.SCROLL
@@ -418,6 +419,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             Scene.WIDGETS -> buildWidgetsScene()
             Scene.GROUP -> buildGroupScene()
             Scene.TINT -> buildTintScene()
+            Scene.NESTED -> buildNestedScene()
         }
         sceneHost.addView(root)
         updateSceneBar()
@@ -775,6 +777,76 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
         ))
+        return root
+    }
+
+    /**
+     * 场景 13：跨层级祖先背景 —— 玻璃埋在 root 下面两层容器里，
+     * backdropSource 直接指到 root。
+     *
+     * 这是 issue #12 的崩溃条件：root → 玻璃 路径上的中间容器此刻正在
+     * 录制自己的 RenderNode，天真地 source.draw() 会对它重入 beginRecording。
+     * 捕获怎么绕开重入和引用成环见 BackdropCapture。
+     */
+    private fun buildNestedScene(): View {
+        val root = FrameLayout(this)
+
+        // 背景：滑动条纹（同 LIST 场景，折射没对齐一眼能看出来）
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(80), 0, dp(160))
+        }
+        repeat(24) { i ->
+            content.addView(TextView(this).apply {
+                text = "ROW $i  ▍▍▍  ROW $i  ▍▍▍"
+                textSize = 20f
+                setTextColor(if (i % 2 == 0) Color.WHITE else 0xFFFFE066.toInt())
+                setBackgroundColor(if (i % 2 == 0) 0xFF1B3A6B.toInt() else 0xFF0B1D3A.toInt())
+                setPadding(dp(16), dp(16), dp(16), dp(16))
+                maxLines = 1
+            })
+        }
+        root.addView(ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            setBackgroundColor(COLOR_SCROLL_GUTTER)
+            addView(content)
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        // root > outer > inner > 玻璃：中间隔两层容器
+        val inner = FrameLayout(this).apply {
+            glassView.layoutParams = centerGlassParams()
+            addView(glassView)
+        }
+        val outer = FrameLayout(this).apply {
+            addView(inner, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            ))
+        }
+        glassView.backdropSource = root
+        root.addView(outer, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        root.addView(TextView(this).apply {
+            text = getString(R.string.nested_hint)
+            textSize = 13f
+            setTextColor(0xCCFFFFFF.toInt())
+            setShadowLayer(6f, 0f, 1f, Color.BLACK)
+            gravity = Gravity.CENTER
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.BOTTOM
+            bottomMargin = dp(120)
+            leftMargin = dp(20)
+            rightMargin = dp(20)
+        })
         return root
     }
 

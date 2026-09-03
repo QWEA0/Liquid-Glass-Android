@@ -144,7 +144,9 @@ Wrong enum constants are the usual cause of a failed build. These are the only v
   tree (a RecyclerView the glass floats over, a wallpaper outside the ScrollView) and the
   overlap is computed from screen coordinates. Keeps the GPU pipeline; scroll in the source
   tree auto-invalidates the glass. XML: `app:backdropSourceId="@id/…"`. The source must not be
-  the glass itself or one of its descendants.
+  the glass itself or one of its descendants. When the source is an ancestor of the glass, the
+  branch that contains the glass is captured last, so siblings drawn after that branch end up
+  beneath it, and scale/rotation on containers along the branch is not applied to their content.
 - `LiquidGlassView.setCustomBackdropCapture(capture: (RectF) -> Bitmap?)` — supply the backdrop
   bitmap yourself. Forces the CPU pipeline (disables the API 31+/33+ GPU paths); prefer
   `backdropSource` unless the backdrop is not a View at all.

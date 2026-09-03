@@ -680,6 +680,9 @@ open class LiquidGlassView @JvmOverloads constructor(
      *
      * 注意：
      * - source 不能是玻璃自身或它的后代（会造成录制重入），传入时被忽略并打日志
+     * - source 是玻璃的跨层级祖先（比如整个根布局）时，玻璃所在的那条分支
+     *   会被单独补画在最后（见 [BackdropCapture]）：同层里排在它之后的兄弟视图
+     *   会被它盖住，分支上的容器带缩放/旋转时其内容不跟着变换
      * - 玻璃超出 source 边界的部分捕获为透明，需要自行保证覆盖关系
      * - source 所在的树滚动时会自动触发重绘（见 [backdropScrollListener]）；
      *   内容以其它方式变化（动画等）需要自行 [invalidate] 或开 [enableDynamicBackground]

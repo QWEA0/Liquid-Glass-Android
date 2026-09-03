@@ -262,5 +262,9 @@
     <string name="tint_red">红</string>
     <string name="tint_pink">粉</string>
     <string name="tint_purple">紫</string>
+
+    <!-- 嵌套场景（跨层级祖先背景） -->
+    <string name="scene_nested">嵌套</string>
+    <string name="nested_hint">玻璃埋在两层容器里，backdropSource 直接指向场景根布局。</string>
 </resources>
 

@@ -30,7 +30,6 @@ import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.os.Build
 import android.util.Log
-import android.view.View
 import androidx.annotation.RequiresApi
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -297,6 +296,8 @@ internal class GlassLensRenderer {
     private val location = IntArray(2)
     private val parentLocation = IntArray(2)
 
+    private val backdropCapture = BackdropCapture()
+
     /** AGSL 编译失败（个别设备驱动问题）时为 false，调用方应回退旧管线 */
     val isAvailable: Boolean
         get() = !shaderBroken
@@ -360,13 +361,11 @@ internal class GlassLensRenderer {
         try {
             recordingCanvas.translate(margin - offsetX, margin - offsetY)
             glassView.isCapturingBackdrop = true
-            // 硬件画布上父视图绘制子视图不走 View.draw，isCapturingBackdrop 拦不住自己；
-            // setTransitionVisibility 只改可见性标志、不触发 invalidate（同旧 GPU 管线）
-            glassView.setTransitionVisibility(View.INVISIBLE)
+            // 硬件画布上父视图绘制子视图不走 View.draw，isCapturingBackdrop 拦不住
+            // 自己；跳过自身、以及跨层级祖先的重入/成环处理都在 BackdropCapture 里
             try {
-                parent.draw(recordingCanvas)
+                backdropCapture.draw(recordingCanvas, parent, glassView)
             } finally {
-                glassView.setTransitionVisibility(View.VISIBLE)
                 glassView.isCapturingBackdrop = false
             }
         } finally {

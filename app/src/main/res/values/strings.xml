@@ -262,5 +262,9 @@
     <string name="tint_red">Red</string>
     <string name="tint_pink">Pink</string>
     <string name="tint_purple">Purple</string>
+
+    <!-- Nested Scene (cross-level ancestor backdrop) -->
+    <string name="scene_nested">Nested</string>
+    <string name="nested_hint">Glass sits two containers deep; backdropSource points at the scene root.</string>
 </resources>
 

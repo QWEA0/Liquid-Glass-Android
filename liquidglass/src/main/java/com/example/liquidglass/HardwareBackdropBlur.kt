@@ -31,7 +31,6 @@ import android.graphics.RuntimeColorFilter
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.os.Build
-import android.view.View
 import androidx.annotation.RequiresApi
 
 @RequiresApi(Build.VERSION_CODES.S)
@@ -115,6 +114,8 @@ internal class HardwareBackdropBlur {
     private val location = IntArray(2)
     private val parentLocation = IntArray(2)
 
+    private val backdropCapture = BackdropCapture()
+
     /**
      * 绘制处理后的背景到目标画布
      *
@@ -174,13 +175,10 @@ internal class HardwareBackdropBlur {
             // ⚠️ 硬件画布上父视图绘制子视图走的是 updateDisplayListIfDirty，
             // 不会经过 View.draw(Canvas)，所以 isCapturingBackdrop 拦截不到自己，
             // 会对正在录制中的 RenderNode 重入 beginRecording 导致崩溃。
-            // setTransitionVisibility 只改可见性标志、不触发 invalidate，
-            // 让父视图 dispatchDraw 直接跳过本视图。
-            glassView.setTransitionVisibility(View.INVISIBLE)
+            // 跳过自身、以及跨层级祖先的重入/成环处理都在 BackdropCapture 里。
             try {
-                parent.draw(recordingCanvas)
+                backdropCapture.draw(recordingCanvas, parent, glassView)
             } finally {
-                glassView.setTransitionVisibility(View.VISIBLE)
                 glassView.isCapturingBackdrop = false
             }
         } finally {
