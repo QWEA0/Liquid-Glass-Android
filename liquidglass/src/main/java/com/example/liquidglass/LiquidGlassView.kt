@@ -278,18 +278,124 @@ open class LiquidGlassView @JvmOverloads constructor(
             field = value.coerceIn(0.5f, 1f)
         }
 
-    // 圆角半径（运行时可调，GPU/CPU 路径均生效）
+    private var cornerTL = 999f
+    private var cornerTR = 999f
+    private var cornerBR = 999f
+    private var cornerBL = 999f
+
+    // 圆角半径（运行时可调，GPU/CPU 路径均生效）。统一设四个角；
+    // 逐角设置见 cornerRadiusTopLeft 等 / setCornerRadii
     var cornerRadius = 999f
         set(value) {
-            if (field != value) {
-                field = value
-                updateClipPath()
-                blurDirty = true
-                aberrationDirty = true
-                dispersionDirty = true
-                invalidate()
+            val changed = field != value ||
+                cornerTL != value || cornerTR != value || cornerBR != value || cornerBL != value
+            field = value
+            if (changed) {
+                cornerTL = value
+                cornerTR = value
+                cornerBR = value
+                cornerBL = value
+                onCornersChanged()
             }
         }
+
+    /** 逐角圆角（px）。M3 分组列表这类"首行只圆上角、末行只圆下角"的形状靠它 */
+    var cornerRadiusTopLeft: Float
+        get() = cornerTL
+        set(value) = setCornerRadii(value, cornerTR, cornerBR, cornerBL)
+    var cornerRadiusTopRight: Float
+        get() = cornerTR
+        set(value) = setCornerRadii(cornerTL, value, cornerBR, cornerBL)
+    var cornerRadiusBottomRight: Float
+        get() = cornerBR
+        set(value) = setCornerRadii(cornerTL, cornerTR, value, cornerBL)
+    var cornerRadiusBottomLeft: Float
+        get() = cornerBL
+        set(value) = setCornerRadii(cornerTL, cornerTR, cornerBR, value)
+
+    /**
+     * 逐角设置圆角（px，顺序：左上、右上、右下、左下）
+     *
+     * 透镜 SDF、裁剪、阴影、边缘高光、CPU 色散裁剪全部跟随；
+     * 之后再设 [cornerRadius] 会把四个角重新统一。
+     */
+    fun setCornerRadii(topLeft: Float, topRight: Float, bottomRight: Float, bottomLeft: Float) {
+        val tl = topLeft.coerceAtLeast(0f)
+        val tr = topRight.coerceAtLeast(0f)
+        val br = bottomRight.coerceAtLeast(0f)
+        val bl = bottomLeft.coerceAtLeast(0f)
+        if (tl == cornerTL && tr == cornerTR && br == cornerBR && bl == cornerBL) return
+        cornerTL = tl
+        cornerTR = tr
+        cornerBR = br
+        cornerBL = bl
+        onCornersChanged()
+    }
+
+    // ==================== 平边（组内相邻边不做斜面） ====================
+
+    private var flatTop = false
+    private var flatRight = false
+    private var flatBottom = false
+    private var flatLeft = false
+
+    /**
+     * 把某几条边设为"平边"：那条边上没有斜面、折射带、高光和内阴影，看起来玻璃
+     * 是从那条边延伸出去的。几块玻璃贴边拼成一块（M3 分组列表）时，相邻边设平边，
+     * 拼接处就不会各自出现一圈透镜边缘。
+     *
+     * 覆盖范围（裁剪）不受影响，仍按真实形状。
+     */
+    fun setFlatEdges(top: Boolean, right: Boolean, bottom: Boolean, left: Boolean) {
+        if (top == flatTop && right == flatRight && bottom == flatBottom && left == flatLeft) return
+        flatTop = top
+        flatRight = right
+        flatBottom = bottom
+        flatLeft = left
+        updateClipPath()
+        blurDirty = true
+        aberrationDirty = true
+        dispersionDirty = true
+        invalidate()
+    }
+
+    val hasFlatEdges: Boolean
+        get() = flatTop || flatRight || flatBottom || flatLeft
+
+    /** 平边方向把矩形外推的距离（px）：远到边缘效果完全落在视图外 */
+    private val flatEdgeExtend = 4096f
+
+    /** 平边方向外扩后的矩形（给经典管线的边缘高光用；视图画布会裁掉外面的部分） */
+    private fun extendFlatEdges(bounds: RectF): RectF {
+        if (!hasFlatEdges) return bounds
+        val r = RectF(bounds)
+        if (flatTop) r.top -= flatEdgeExtend
+        if (flatBottom) r.bottom += flatEdgeExtend
+        if (flatLeft) r.left -= flatEdgeExtend
+        if (flatRight) r.right += flatEdgeExtend
+        return r
+    }
+
+    private fun onCornersChanged() {
+        updateClipPath()
+        blurDirty = true
+        aberrationDirty = true
+        dispersionDirty = true
+        invalidate()
+    }
+
+    /**
+     * 当前圆角的 8 值数组（Path.addRoundRect 顺序），每个角钳制到视图短边的一半，
+     * 再减去 inset（内缩描边用）
+     */
+    internal fun cornerRadiiPx(inset: Float = 0f): FloatArray {
+        val cap = if (width > 0 && height > 0) min(width, height) / 2f else Float.MAX_VALUE
+        val tl = (cornerTL.coerceAtMost(cap) - inset).coerceAtLeast(0f)
+        val tr = (cornerTR.coerceAtMost(cap) - inset).coerceAtLeast(0f)
+        val br = (cornerBR.coerceAtMost(cap) - inset).coerceAtLeast(0f)
+        val bl = (cornerBL.coerceAtMost(cap) - inset).coerceAtLeast(0f)
+        return floatArrayOf(tl, tl, tr, tr, br, br, bl, bl)
+    }
 
     var overLight = false
         set(value) {
@@ -364,6 +470,19 @@ open class LiquidGlassView @JvmOverloads constructor(
         }
 
     /** 色散强度（0-1）：三通道折射差异，边缘光谱边纹宽度（仅透镜管线） */
+    /**
+     * 边缘柔化（px，仅透镜管线）：折射带内沿法线方向抹匀的宽度，0 = 关。
+     * 折射的压缩带在高对比背景上会是一条硬线，给几 px 就软成一段渐变。
+     */
+    var edgeSoftness = 0f
+        set(value) {
+            val clamped = value.coerceIn(0f, 40f)
+            if (field != clamped) {
+                field = clamped
+                invalidate()
+            }
+        }
+
     var dispersionStrength = 0.10f
         set(value) {
             val clamped = value.coerceIn(0f, 1f)
@@ -771,6 +890,7 @@ open class LiquidGlassView @JvmOverloads constructor(
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val clipPath = Path()  // 用于圆角裁剪
+    private val shapePath = Path()  // 阴影 / 降级底色按当前圆角画整块形状时复用
     private val resultSrcRect = Rect()  // 复用，避免每帧分配
     private val resultDstRect = Rect()
 
@@ -811,9 +931,22 @@ open class LiquidGlassView @JvmOverloads constructor(
             aberrationIntensity = ta.getFloat(R.styleable.LiquidGlassView_aberrationIntensity, aberrationIntensity)
             elasticity = ta.getFloat(R.styleable.LiquidGlassView_elasticity, elasticity)
             cornerRadius = ta.getDimension(R.styleable.LiquidGlassView_cornerRadius, cornerRadius)
+            if (ta.hasValue(R.styleable.LiquidGlassView_cornerRadiusTopLeft) ||
+                ta.hasValue(R.styleable.LiquidGlassView_cornerRadiusTopRight) ||
+                ta.hasValue(R.styleable.LiquidGlassView_cornerRadiusBottomRight) ||
+                ta.hasValue(R.styleable.LiquidGlassView_cornerRadiusBottomLeft)
+            ) {
+                setCornerRadii(
+                    ta.getDimension(R.styleable.LiquidGlassView_cornerRadiusTopLeft, cornerRadius),
+                    ta.getDimension(R.styleable.LiquidGlassView_cornerRadiusTopRight, cornerRadius),
+                    ta.getDimension(R.styleable.LiquidGlassView_cornerRadiusBottomRight, cornerRadius),
+                    ta.getDimension(R.styleable.LiquidGlassView_cornerRadiusBottomLeft, cornerRadius)
+                )
+            }
             bevelWidth = ta.getDimension(R.styleable.LiquidGlassView_bevelWidth, bevelWidth)
             refractionHeight = ta.getDimension(R.styleable.LiquidGlassView_refractionHeight, refractionHeight)
             dispersionStrength = ta.getFloat(R.styleable.LiquidGlassView_dispersionStrength, dispersionStrength)
+            edgeSoftness = ta.getDimension(R.styleable.LiquidGlassView_edgeSoftness, edgeSoftness)
             enableSensorHighlight = ta.getBoolean(R.styleable.LiquidGlassView_sensorHighlight, enableSensorHighlight)
             enableAdaptiveTint = ta.getBoolean(R.styleable.LiquidGlassView_adaptiveTint, enableAdaptiveTint)
             glassTint = ta.getColor(R.styleable.LiquidGlassView_glassTint, glassTint)
@@ -826,6 +959,10 @@ open class LiquidGlassView @JvmOverloads constructor(
                 GlassMaterial.CLEAR
             } else {
                 GlassMaterial.REGULAR
+            }
+            val flags = ta.getInt(R.styleable.LiquidGlassView_flatEdges, 0)
+            if (flags != 0) {
+                setFlatEdges(flags and 1 != 0, flags and 2 != 0, flags and 4 != 0, flags and 8 != 0)
             }
             // 背景来源只能记下 id：此时目标视图还没 inflate 完，挂载后再从根视图解析
             pendingBackdropSourceId = ta.getResourceId(R.styleable.LiquidGlassView_backdropSourceId, 0)
@@ -1004,8 +1141,8 @@ open class LiquidGlassView @JvmOverloads constructor(
     private fun updateClipPath() {
         if (width > 0 && height > 0) {
             clipPath.reset()
-            val rect = RectF(0f, 0f, width.toFloat(), height.toFloat())
-            clipPath.addRoundRect(rect, cornerRadius, cornerRadius, Path.Direction.CW)
+            val rect = extendFlatEdges(RectF(0f, 0f, width.toFloat(), height.toFloat()))
+            clipPath.addRoundRect(rect, cornerRadiiPx(), Path.Direction.CW)
         }
     }
     
@@ -1047,7 +1184,9 @@ open class LiquidGlassView @JvmOverloads constructor(
 
         val shadowOffset = if (overLight) 16f else 12f
         val rect = RectF(0f, shadowOffset, width.toFloat(), height.toFloat() + shadowOffset)
-        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, shadowPaint)
+        shapePath.reset()
+        shapePath.addRoundRect(rect, cornerRadiiPx(), Path.Direction.CW)
+        canvas.drawPath(shapePath, shadowPaint)
     }
     
     /**
@@ -1182,12 +1321,42 @@ open class LiquidGlassView @JvmOverloads constructor(
         val s1cy = p1?.centerY() ?: (h / 2f)
         val s1hw = ((p1?.width() ?: w) / 2f).coerceAtLeast(1f)
         val s1hh = ((p1?.height() ?: h) / 2f).coerceAtLeast(1f)
-        val r1 = (if (p1 != null) primaryShapeCorner else cornerRadius).coerceIn(0f, min(s1hw, s1hh))
+        // 主形状圆角：自定义形状用统一半径，充满视图时走逐角半径
+        val rCap = min(s1hw, s1hh)
+        val r1TL: Float
+        val r1TR: Float
+        val r1BR: Float
+        val r1BL: Float
+        if (p1 != null) {
+            val r = primaryShapeCorner.coerceIn(0f, rCap)
+            r1TL = r
+            r1TR = r
+            r1BR = r
+            r1BL = r
+        } else {
+            r1TL = cornerTL.coerceIn(0f, rCap)
+            r1TR = cornerTR.coerceIn(0f, rCap)
+            r1BR = cornerBR.coerceIn(0f, rCap)
+            r1BL = cornerBL.coerceIn(0f, rCap)
+        }
 
         val p2 = secondaryShape
         val s2hw = if (p2 != null) (p2.width() / 2f).coerceAtLeast(1f) else 0f
         val s2hh = if (p2 != null) (p2.height() / 2f).coerceAtLeast(1f) else 0f
         val r2 = if (p2 != null) secondaryShapeCorner.coerceIn(0f, min(s2hw, s2hh)) else 0f
+
+        // —— 透镜形状：平边方向把矩形推到视图外，那条边上就没有斜面 ——
+        var l1cx = s1cx
+        var l1cy = s1cy
+        var l1hw = s1hw
+        var l1hh = s1hh
+        if (hasFlatEdges) {
+            val half = flatEdgeExtend / 2f
+            if (flatTop) { l1cy -= half; l1hh += half }
+            if (flatBottom) { l1cy += half; l1hh += half }
+            if (flatLeft) { l1cx -= half; l1hw += half }
+            if (flatRight) { l1cx += half; l1hw += half }
+        }
 
         // —— 色散：色差/色散任一开启即生效，量级沿用对应滑杆 ——
         val disp = when {
@@ -1234,7 +1403,10 @@ open class LiquidGlassView @JvmOverloads constructor(
 
         val params = GlassLensRenderer.LensParams(
             blurRadius = radius,
-            shape1CX = s1cx, shape1CY = s1cy, shape1HW = s1hw, shape1HH = s1hh, radius1 = r1,
+            shape1CX = s1cx, shape1CY = s1cy, shape1HW = s1hw, shape1HH = s1hh,
+            radius1TL = r1TL, radius1TR = r1TR, radius1BR = r1BR, radius1BL = r1BL,
+            lens1CX = l1cx, lens1CY = l1cy, lens1HW = l1hw, lens1HH = l1hh,
+            rimSoft = (edgeSoftness * 2f).toInt() / 2f,
             shape2CX = p2?.centerX() ?: 0f, shape2CY = p2?.centerY() ?: 0f,
             shape2HW = s2hw, shape2HH = s2hh, radius2 = r2,
             blendK = if (p2 != null) shapeBlendSmoothing else 0f,
@@ -1399,10 +1571,11 @@ open class LiquidGlassView @JvmOverloads constructor(
         // 混合比例压到 0.45 以内，不让任意颜色把对比度吃掉
         opaquePaint.color = blendOpaque(base, glassTint, Color.alpha(glassTint) / 255f * 0.45f)
         opaqueBorderPaint.color = if (over) 0x33000000 else 0x40FFFFFF
-        val r = cornerRadius.coerceAtMost(min(width, height) / 2f)
         val rect = RectF(0.75f, 0.75f, width - 0.75f, height - 0.75f)
-        canvas.drawRoundRect(rect, r, r, opaquePaint)
-        canvas.drawRoundRect(rect, r, r, opaqueBorderPaint)
+        shapePath.reset()
+        shapePath.addRoundRect(rect, cornerRadiiPx(0.75f), Path.Direction.CW)
+        canvas.drawPath(shapePath, opaquePaint)
+        canvas.drawPath(shapePath, opaqueBorderPaint)
     }
 
     /** 把染色按比例混进不透明底色（结果恒为不透明） */
@@ -1492,8 +1665,8 @@ open class LiquidGlassView @JvmOverloads constructor(
         val touchOffset = PointF(touchOffsetX, touchOffsetY)
         edgeHighlightEffect.draw(
             canvas = canvas,
-            bounds = bounds,
-            cornerRadius = cornerRadius,
+            bounds = extendFlatEdges(bounds),
+            cornerRadii = cornerRadiiPx(),
             mouseOffset = touchOffset,
             overLight = overLight,
             borderWidth = edgeHighlightBorderWidth,
@@ -1536,7 +1709,8 @@ open class LiquidGlassView @JvmOverloads constructor(
 
         // ✅ 同步优化捕获参数到 EnhancedBlurEffect
         if (enableOptimizedCapture) {
-            enhancedBlurEffect.cornerRadius = cornerRadius
+            enhancedBlurEffect.cornerRadius = max(max(cornerTL, cornerTR), max(cornerBR, cornerBL))
+            enhancedBlurEffect.cornerRadii = cornerRadiiPx()
             enhancedBlurEffect.captureMargin = blurRadius * 2f  // 模糊扩散边距
         }
 
@@ -1632,7 +1806,8 @@ open class LiquidGlassView @JvmOverloads constructor(
                     refFactor = dispersionFactor,
                     refDispersion = dispersionGain,
                     downscale = dispersionDownsample,
-                    cornerRadius = cornerRadius  // 传递圆角半径
+                    cornerRadius = cornerRadius,  // 传递圆角半径
+                    cornerRadii = cornerRadiiPx()
                 )
 
                 cachedResult?.recycle()

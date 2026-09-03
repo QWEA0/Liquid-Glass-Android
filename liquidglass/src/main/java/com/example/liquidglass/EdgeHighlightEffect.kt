@@ -29,6 +29,7 @@ class EdgeHighlightEffect {
     // 缓存的路径对象
     private val borderPath = Path()
     private val innerPath = Path()
+    private val overlayPath = Path()
 
     // API 36+ 单 pass 融合混合器（screen+overlay 合一 + 逐像素亮度自适应）；
     // 创建失败或不支持时保持 null，走双 pass 回退
@@ -40,7 +41,7 @@ class EdgeHighlightEffect {
      *
      * @param canvas 画布
      * @param bounds 边界矩形
-     * @param cornerRadius 圆角半径
+     * @param cornerRadii 圆角半径数组（8 值，Path.addRoundRect 顺序：左上、右上、右下、左下）
      * @param mouseOffset 触摸偏移量（归一化，-100 到 100）
      * @param overLight 是否在亮背景上
      * @param borderWidth 边框宽度（像素）
@@ -51,7 +52,7 @@ class EdgeHighlightEffect {
     fun draw(
         canvas: Canvas,
         bounds: RectF,
-        cornerRadius: Float,
+        cornerRadii: FloatArray,
         mouseOffset: PointF = PointF(0f, 0f),
         overLight: Boolean = false,
         borderWidth: Float = 1.5f,
@@ -62,7 +63,7 @@ class EdgeHighlightEffect {
 
         // 1. 绘制 Over Light 效果（如果需要）
         if (overLight) {
-            drawOverLightEffect(canvas, bounds, cornerRadius, normalizedOpacity)
+            drawOverLightEffect(canvas, bounds, cornerRadii, normalizedOpacity)
         }
 
         // 2. API 36+ 硬件画布：单 pass 融合绘制（screen+overlay 合一，
@@ -76,14 +77,14 @@ class EdgeHighlightEffect {
             }
             val blender = rimBlender
             if (blender != null) {
-                drawBorderLayerFused(canvas, bounds, cornerRadius, mouseOffset, blender, normalizedOpacity, borderWidth)
+                drawBorderLayerFused(canvas, bounds, cornerRadii, mouseOffset, blender, normalizedOpacity, borderWidth)
                 return
             }
         }
 
         // 3. 回退：双 pass PorterDuff（Screen + Overlay）
-        drawBorderLayer(canvas, bounds, cornerRadius, mouseOffset, PorterDuff.Mode.SCREEN, 0.2f * normalizedOpacity, borderWidth)
-        drawBorderLayer(canvas, bounds, cornerRadius, mouseOffset, PorterDuff.Mode.OVERLAY, 1.0f * normalizedOpacity, borderWidth)
+        drawBorderLayer(canvas, bounds, cornerRadii, mouseOffset, PorterDuff.Mode.SCREEN, 0.2f * normalizedOpacity, borderWidth)
+        drawBorderLayer(canvas, bounds, cornerRadii, mouseOffset, PorterDuff.Mode.OVERLAY, 1.0f * normalizedOpacity, borderWidth)
     }
 
     /**
@@ -94,7 +95,7 @@ class EdgeHighlightEffect {
     private fun drawBorderLayerFused(
         canvas: Canvas,
         bounds: RectF,
-        cornerRadius: Float,
+        cornerRadii: FloatArray,
         mouseOffset: PointF,
         blender: RuntimeXfermode,
         normalizedOpacity: Float,
@@ -130,7 +131,7 @@ class EdgeHighlightEffect {
             Shader.TileMode.CLAMP
         )
 
-        buildBorderPath(bounds, cornerRadius, borderWidth)
+        buildBorderPath(bounds, cornerRadii, borderWidth)
 
         borderPaint.reset()
         borderPaint.isAntiAlias = true
@@ -147,9 +148,9 @@ class EdgeHighlightEffect {
     /**
      * 构建边框环形路径（外圆角矩形减去内圆角矩形）
      */
-    private fun buildBorderPath(bounds: RectF, cornerRadius: Float, borderWidth: Float) {
+    private fun buildBorderPath(bounds: RectF, cornerRadii: FloatArray, borderWidth: Float) {
         borderPath.reset()
-        borderPath.addRoundRect(bounds, cornerRadius, cornerRadius, Path.Direction.CW)
+        borderPath.addRoundRect(bounds, cornerRadii, Path.Direction.CW)
 
         innerPath.reset()
         val innerBounds = RectF(
@@ -158,7 +159,8 @@ class EdgeHighlightEffect {
             bounds.right - borderWidth,
             bounds.bottom - borderWidth
         )
-        innerPath.addRoundRect(innerBounds, cornerRadius - borderWidth, cornerRadius - borderWidth, Path.Direction.CW)
+        val innerRadii = FloatArray(8) { (cornerRadii[it] - borderWidth).coerceAtLeast(0f) }
+        innerPath.addRoundRect(innerBounds, innerRadii, Path.Direction.CW)
 
         borderPath.op(innerPath, Path.Op.DIFFERENCE)
     }
@@ -166,19 +168,21 @@ class EdgeHighlightEffect {
     /**
      * 绘制 Over Light 效果
      */
-    private fun drawOverLightEffect(canvas: Canvas, bounds: RectF, cornerRadius: Float, opacity: Float) {
+    private fun drawOverLightEffect(canvas: Canvas, bounds: RectF, cornerRadii: FloatArray, opacity: Float) {
+        overlayPath.reset()
+        overlayPath.addRoundRect(bounds, cornerRadii, Path.Direction.CW)
         // 第一层：黑色半透明层（opacity: 0.2 * opacity）
         overlayPaint.reset()
         overlayPaint.isAntiAlias = true
         overlayPaint.color = Color.argb((0.2f * opacity * 255).toInt(), 0, 0, 0)
-        canvas.drawRoundRect(bounds, cornerRadius, cornerRadius, overlayPaint)
+        canvas.drawPath(overlayPath, overlayPaint)
 
         // 第二层：黑色 Overlay 混合模式层（opacity: 1.0 * opacity）
         overlayPaint.reset()
         overlayPaint.isAntiAlias = true
         overlayPaint.color = Color.argb((opacity * 255).toInt(), 0, 0, 0)
         overlayPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.OVERLAY)
-        canvas.drawRoundRect(bounds, cornerRadius, cornerRadius, overlayPaint)
+        canvas.drawPath(overlayPath, overlayPaint)
         overlayPaint.xfermode = null
     }
     
@@ -192,7 +196,7 @@ class EdgeHighlightEffect {
     private fun drawBorderLayer(
         canvas: Canvas,
         bounds: RectF,
-        cornerRadius: Float,
+        cornerRadii: FloatArray,
         mouseOffset: PointF,
         blendMode: PorterDuff.Mode,
         baseOpacity: Float,
@@ -242,7 +246,7 @@ class EdgeHighlightEffect {
         )
         
         // 创建边框路径（使用 mask 效果）
-        buildBorderPath(bounds, cornerRadius, borderWidth)
+        buildBorderPath(bounds, cornerRadii, borderWidth)
 
         // 绘制边框
         borderPaint.reset()

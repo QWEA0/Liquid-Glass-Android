@@ -79,6 +79,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         TEXT(R.string.scene_text),
         SHOWCASE(R.string.scene_showcase),
         WIDGETS(R.string.scene_widgets),
+        GROUP(R.string.scene_group),
         TINT(R.string.scene_tint)
     }
 
@@ -177,7 +178,11 @@ class ProfessionalDemoActivity : AppCompatActivity() {
 
         createGlassView()
         createMainLayout()
-        showScene(Scene.SCROLL)
+        // adb shell am start ... --es scene group：直接打开指定场景（取 Scene 枚举名，不分大小写）
+        val requested = intent.getStringExtra("scene")?.let { name ->
+            Scene.entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
+        }
+        showScene(requested ?: Scene.SCROLL)
         startPerformanceMonitoring()
     }
 
@@ -411,6 +416,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             Scene.TEXT -> buildTextScene()
             Scene.SHOWCASE -> buildShowcaseScene()
             Scene.WIDGETS -> buildWidgetsScene()
+            Scene.GROUP -> buildGroupScene()
             Scene.TINT -> buildTintScene()
         }
         sceneHost.addView(root)
@@ -1466,6 +1472,118 @@ class ProfessionalDemoActivity : AppCompatActivity() {
 
         // 本场景不含主 glassView，性能悬浮窗读常规材质按钮的数据
         statsSource = regularButton
+        return root
+    }
+
+    /**
+     * 场景：M3 分组列表 —— 每一行是独立的 [LiquidGlassListItem]，位置决定圆哪几个角。
+     *
+     * 行放在一个透明的 LinearLayout 里，直接父容器采不到壁纸，所以背景统一指到
+     * 壁纸层（backdropSource）。不指向 root：root 里还有其他玻璃行，互相采样会套娃。
+     */
+    private fun buildGroupScene(): View {
+        val root = FrameLayout(this)
+
+        // 背景：与文字场景同一张壁纸，两张上下拼接可滚动，单独一层给玻璃当 backdropSource
+        val backdrop = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            repeat(2) { i ->
+                addView(ImageView(this@ProfessionalDemoActivity).apply {
+                    setImageResource(R.drawable.text_backdrop)
+                    adjustViewBounds = true
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    if (i == 1) scaleY = -1f
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    )
+                })
+            }
+        }
+        root.addView(ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            setBackgroundColor(0xFF060B18.toInt())
+            addView(backdrop)
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), 0, dp(20), 0)
+        }
+
+        fun detail(textRes: Int) = TextView(this).apply {
+            text = getString(textRes)
+            textSize = 14f
+            setTextColor(0xCCFFFFFF.toInt())
+            setShadowLayer(6f, 0f, 1f, Color.BLACK)
+            setLineSpacing(0f, 1.2f)
+        }
+
+        fun row(
+            titleRes: Int,
+            subRes: Int?,
+            iconRes: Int,
+            detailRes: Int? = null,
+            trailingRes: Int? = null
+        ) = LiquidGlassListItem(this).apply {
+            enableDynamicBackground = true
+            backdropSource = backdrop
+            headline = getString(titleRes)
+            supportingText = subRes?.let { getString(it) }
+            setLeadingIconResource(iconRes)
+            trailingText = trailingRes?.let { getString(it) }
+            if (detailRes != null) {
+                // 点击整行展开详情，尾部箭头跟着转 180°
+                setTrailingIconResource(R.drawable.ic_expand_more)
+                expandedView = detail(detailRes)
+            }
+        }
+
+        // 一组四行：首行圆上角、末行圆下角、中间直角；每行点击展开
+        val group = listOf(
+            row(R.string.group_wifi_title, R.string.group_wifi_sub, R.drawable.ic_tab_home,
+                detailRes = R.string.group_wifi_detail),
+            row(R.string.group_bt_title, R.string.group_bt_sub, R.drawable.ic_tab_explore,
+                detailRes = R.string.group_bt_detail),
+            row(R.string.group_notif_title, R.string.group_notif_sub, R.drawable.ic_tab_library,
+                detailRes = R.string.group_notif_detail),
+            row(R.string.group_display_title, R.string.group_display_sub, android.R.drawable.ic_menu_view,
+                detailRes = R.string.group_display_detail, trailingRes = R.string.group_display_trailing)
+        )
+        LiquidGlassListItem.applyGroupPositions(group)
+        group.forEach { column.addView(it, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )) }
+
+        // 单独一行：四角全圆，不可展开
+        val single = row(R.string.group_signout_title, null, android.R.drawable.ic_lock_power_off)
+        single.position = LiquidGlassListItem.Position.SINGLE
+        column.addView(single, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(24) })
+
+        column.addView(TextView(this).apply {
+            text = getString(R.string.group_hint)
+            textSize = 13f
+            setTextColor(0xCCFFFFFF.toInt())
+            setShadowLayer(6f, 0f, 1f, Color.BLACK)
+            gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(20) })
+
+        root.addView(column, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply { gravity = Gravity.CENTER })
+
+        statsSource = group.first()
         return root
     }
 

@@ -22,6 +22,18 @@
         <attr name="aberrationIntensity" format="float" />
         <attr name="elasticity" format="float" />
         <attr name="cornerRadius" format="dimension" />
+        <!-- 逐角圆角（给了任一项就按逐角生效，没给的角沿用 cornerRadius） -->
+        <attr name="cornerRadiusTopLeft" format="dimension" />
+        <attr name="cornerRadiusTopRight" format="dimension" />
+        <attr name="cornerRadiusBottomRight" format="dimension" />
+        <attr name="cornerRadiusBottomLeft" format="dimension" />
+        <!-- 平边：这些边上不做斜面/折射带/高光（贴边拼接多块玻璃时用） -->
+        <attr name="flatEdges">
+            <flag name="top" value="1" />
+            <flag name="right" value="2" />
+            <flag name="bottom" value="4" />
+            <flag name="left" value="8" />
+        </attr>
         <!-- 背景来源视图 id（不填 = 直接父容器） -->
         <attr name="backdropSourceId" format="reference" />
 
@@ -33,6 +45,8 @@
         <attr name="bevelWidth" format="dimension" />
         <attr name="refractionHeight" format="dimension" />
         <attr name="dispersionStrength" format="float" />
+        <!-- 边缘柔化宽度（透镜管线）：折射压缩带沿法线抹匀，0 = 关 -->
+        <attr name="edgeSoftness" format="dimension" />
         <attr name="sensorHighlight" format="boolean" />
         <attr name="adaptiveTint" format="boolean" />
 
@@ -55,6 +69,26 @@
         <attr name="android:src" />
         <!-- 显式指定后图标不再跟随背景明暗自动切换 -->
         <attr name="glassIconTint" format="color" />
+    </declare-styleable>
+
+    <!-- 现成小部件：M3 列表项（分组位置决定圆哪几个角） -->
+    <declare-styleable name="LiquidGlassListItem">
+        <attr name="glassListPosition" format="enum">
+            <enum name="single" value="0" />
+            <enum name="first" value="1" />
+            <enum name="middle" value="2" />
+            <enum name="last" value="3" />
+        </attr>
+        <attr name="glassHeadline" format="string" />
+        <attr name="glassSupportingText" format="string" />
+        <attr name="glassLeadingIcon" format="reference" />
+        <attr name="glassTrailingIcon" format="reference" />
+        <attr name="glassTrailingText" format="string" />
+        <!-- 组外沿圆角（默认 20dp）与组内相邻边圆角（默认 0） -->
+        <attr name="glassGroupCornerRadius" format="dimension" />
+        <attr name="glassInnerCornerRadius" format="dimension" />
+        <!-- 显式指定后文字/图标不再跟随背景明暗自动切换 -->
+        <attr name="android:textColor" />
     </declare-styleable>
 
     <!-- 现成小部件：玻璃标签条（entries 指向 string-array） -->

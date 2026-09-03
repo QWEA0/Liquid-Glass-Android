@@ -229,6 +229,24 @@
     <string name="widgets_toast_tab">标签：%1$s</string>
     <string name="widgets_toast_fab">点击了 FAB</string>
 
+    <!-- 分组场景（M3 分组列表项） -->
+    <string name="scene_group">分组</string>
+    <string name="group_hint">每一行都是独立的玻璃 view，位置决定圆哪几个角。</string>
+    <string name="group_wifi_title">Wi‑Fi</string>
+    <string name="group_wifi_sub">已连接 · Home 5G</string>
+    <string name="group_bt_title">蓝牙</string>
+    <string name="group_bt_sub">已开启 · 2 台设备</string>
+    <string name="group_notif_title">通知</string>
+    <string name="group_notif_sub">3 个应用已静音</string>
+    <string name="group_display_title">显示</string>
+    <string name="group_display_sub">自适应亮度</string>
+    <string name="group_display_trailing">80%</string>
+    <string name="group_signout_title">退出登录</string>
+    <string name="group_wifi_detail">Home 5G · 866 Mbps · IPv6\n其他网络：Office、Cafe_Guest、iPhone</string>
+    <string name="group_bt_detail">Pixel Buds Pro · 74%\nGalaxy Watch · 52%</string>
+    <string name="group_notif_detail">已静音：邮件、Slack、天气\n勿扰：23:00 – 07:00</string>
+    <string name="group_display_detail">亮度跟随环境光。\n刷新率：流畅（最高 90 Hz）</string>
+
     <!-- 染色场景（彩色玻璃） -->
     <string name="scene_tint">染色</string>
     <string name="tint_scene_hint">选个颜色、拖一下强度，就是一句 glassTint。</string>

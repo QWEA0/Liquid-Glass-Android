@@ -106,7 +106,8 @@ class ChromaticDispersionEffect {
         refDispersion: Float = 7f,
         downscale: Float = 0.5f,
         cornerRadius: Float = 0f,
-        useNormalMap: Boolean = false
+        useNormalMap: Boolean = false,
+        cornerRadii: FloatArray? = null
     ): Bitmap {
         val startTime = System.currentTimeMillis()
 
@@ -123,10 +124,13 @@ class ChromaticDispersionEffect {
         }
 
         // 应用圆角裁剪（设置圆角外的像素为透明）
-        val clippedSource = if (cornerRadius > 0) {
+        val maxRadius = min(processWidth, processHeight) / 2f
+        val clippedSource = if (cornerRadii != null) {
+            // 逐角圆角：每个角各自缩放并钳制
+            applyRoundedCornerClip(smallSource, FloatArray(8) { min(cornerRadii[it] * downscale, maxRadius) })
+        } else if (cornerRadius > 0) {
             // 限制圆角半径不超过图像尺寸的一半（避免过大的圆角）
             val scaledRadius = cornerRadius * downscale
-            val maxRadius = min(processWidth, processHeight) / 2f
             val clampedRadius = min(scaledRadius, maxRadius)
             applyRoundedCornerClip(smallSource, clampedRadius)
         } else {
@@ -241,7 +245,11 @@ class ChromaticDispersionEffect {
      * @param cornerRadius 圆角半径（像素）
      * @return 裁剪后的图像（圆角外的像素为透明）
      */
-    private fun applyRoundedCornerClip(source: Bitmap, cornerRadius: Float): Bitmap {
+    private fun applyRoundedCornerClip(source: Bitmap, cornerRadius: Float): Bitmap =
+        applyRoundedCornerClip(source, FloatArray(8) { cornerRadius })
+
+    /** 逐角版本：radii 为 8 值数组（Path.addRoundRect 顺序） */
+    private fun applyRoundedCornerClip(source: Bitmap, radii: FloatArray): Bitmap {
         val width = source.width
         val height = source.height
 
@@ -252,7 +260,7 @@ class ChromaticDispersionEffect {
         // 创建圆角路径
         val path = Path()
         val rect = RectF(0f, 0f, width.toFloat(), height.toFloat())
-        path.addRoundRect(rect, cornerRadius, cornerRadius, Path.Direction.CW)
+        path.addRoundRect(rect, radii, Path.Direction.CW)
 
         // 先绘制圆角蒙版（白色）
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -263,7 +271,7 @@ class ChromaticDispersionEffect {
         paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
         canvas.drawBitmap(source, 0f, 0f, paint)
 
-        Log.d(TAG, "Applied rounded corner clip: radius=$cornerRadius")
+        Log.d(TAG, "Applied rounded corner clip: radii=${radii.joinToString()}")
         return output
     }
 

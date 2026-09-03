@@ -229,6 +229,24 @@
     <string name="widgets_toast_tab">Tab: %1$s</string>
     <string name="widgets_toast_fab">FAB clicked</string>
 
+    <!-- Group Scene (M3 grouped list items) -->
+    <string name="scene_group">Group</string>
+    <string name="group_hint">Each row is its own glass view. Position picks which corners round.</string>
+    <string name="group_wifi_title">Wi‑Fi</string>
+    <string name="group_wifi_sub">Connected · Home 5G</string>
+    <string name="group_bt_title">Bluetooth</string>
+    <string name="group_bt_sub">On · 2 devices</string>
+    <string name="group_notif_title">Notifications</string>
+    <string name="group_notif_sub">3 apps muted</string>
+    <string name="group_display_title">Display</string>
+    <string name="group_display_sub">Adaptive brightness</string>
+    <string name="group_display_trailing">80%</string>
+    <string name="group_signout_title">Sign out</string>
+    <string name="group_wifi_detail">Home 5G · 866 Mbps · IPv6\nOther networks: Office, Cafe_Guest, iPhone</string>
+    <string name="group_bt_detail">Pixel Buds Pro · 74%\nGalaxy Watch · 52%</string>
+    <string name="group_notif_detail">Muted: Mail, Slack, Weather\nDo Not Disturb: 23:00 – 07:00</string>
+    <string name="group_display_detail">Brightness follows ambient light.\nRefresh rate: Smooth (up to 90 Hz)</string>
+
     <!-- Tint Scene (coloured glass) -->
     <string name="scene_tint">Tint</string>
     <string name="tint_scene_hint">Pick a colour, drag the strength — that is one glassTint call.</string>

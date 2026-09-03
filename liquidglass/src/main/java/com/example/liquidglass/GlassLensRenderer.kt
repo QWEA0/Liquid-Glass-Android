@@ -4,7 +4,7 @@
  * 用单个 AGSL RuntimeShader 完成 Apple Liquid Glass 的完整光学模型，
  * 取代"位移贴图 + 多个独立效果"的旧架构：
  *
- *   实时圆角矩形 SDF（随 cornerRadius/尺寸实时变化，支持双形状 smin 液态融合）
+ *   实时圆角矩形 SDF（随 cornerRadius/尺寸实时变化，主形状支持逐角半径，双形状 smin 液态融合）
  *     → 斜面厚度剖面（bevelWidth 可调的"玻璃厚度"）
  *     → 屏幕空间法线（SDF 数值梯度）
  *     → 折射（沿法线向外采样 → 边缘出现背景压缩带，透镜感的来源）
@@ -52,8 +52,10 @@ internal class GlassLensRenderer {
             uniform shader content;
             uniform float  margin;
             uniform float2 viewSize;
-            uniform float4 shape1;
-            uniform float  radius1;
+            uniform float4 shape1;    // 真实主形状（触摸凸起的尺度用它）
+            uniform float4 radii1;
+            uniform float4 shape1L;   // 主形状：平边方向延伸到视图外，那条边就没有斜面（视图矩形外硬切）
+            uniform float  rimSoft;   // 边缘柔化：折射带内沿法线方向的抹匀宽度（px，0 = 关）
             uniform float4 shape2;
             uniform float  radius2;
             uniform float  blendK;
@@ -77,13 +79,21 @@ internal class GlassLensRenderer {
                 return length(max(q, float2(0.0))) + min(max(q.x, q.y), 0.0) - r;
             }
 
+            // 逐角半径版：r = (左上, 右上, 右下, 左下)，按 p 所在象限选半径
+            float sdRoundedBox4(float2 p, float2 b, float4 r) {
+                float rx = (p.x > 0.0) ? ((p.y > 0.0) ? r.z : r.y) : ((p.y > 0.0) ? r.w : r.x);
+                float2 q = abs(p) - b + rx;
+                return length(max(q, float2(0.0))) + min(max(q.x, q.y), 0.0) - rx;
+            }
+
             float sminPoly(float a, float b, float k) {
                 float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
                 return mix(b, a, h) - k * h * (1.0 - h);
             }
 
-            float sceneSDF(float2 p) {
-                float d = sdRoundedBox(p - shape1.xy, shape1.zw, radius1);
+            // 斜面 / 法线 / 高光 / 内阴影用透镜形状（平边已延伸出去，不产生边缘）
+            float lensSDF(float2 p) {
+                float d = sdRoundedBox4(p - shape1L.xy, shape1L.zw, radii1);
                 if (shape2.z > 0.5) {
                     float d2 = sdRoundedBox(p - shape2.xy, shape2.zw, radius2);
                     if (blendK > 0.5) {
@@ -97,7 +107,12 @@ internal class GlassLensRenderer {
 
             half4 main(float2 coord) {
                 float2 p = coord - float2(margin, margin);
-                float d = sceneSDF(p);
+                // 视图矩形外硬切：平边方向形状延伸到了视图外，靠这一刀收口，
+                // 平边上不做羽化，两块玻璃贴边拼接时不会叠出一条发丝缝
+                if (p.x < 0.0 || p.y < 0.0 || p.x > viewSize.x || p.y > viewSize.y) {
+                    return half4(0.0);
+                }
+                float d = lensSDF(p);
 
                 // 覆盖率：1.5px 抗锯齿羽化，形状外完全透明
                 float cov = clamp(0.5 - d / 1.5, 0.0, 1.0);
@@ -107,8 +122,8 @@ internal class GlassLensRenderer {
 
                 // SDF 数值梯度 → 屏幕空间外法线
                 float2 n = float2(
-                    sceneSDF(p + float2(1.0, 0.0)) - sceneSDF(p - float2(1.0, 0.0)),
-                    sceneSDF(p + float2(0.0, 1.0)) - sceneSDF(p - float2(0.0, 1.0))
+                    lensSDF(p + float2(1.0, 0.0)) - lensSDF(p - float2(1.0, 0.0)),
+                    lensSDF(p + float2(0.0, 1.0)) - lensSDF(p - float2(0.0, 1.0))
                 );
                 float nLen = length(n);
                 if (nLen > 0.0001) {
@@ -151,11 +166,29 @@ internal class GlassLensRenderer {
                 cR = clamp(cR, lo, hi);
                 cG = clamp(cG, lo, hi);
                 cB = clamp(cB, lo, hi);
-                float3 col = float3(
-                    content.eval(cR).r,
-                    content.eval(cG).g,
-                    content.eval(cB).b
-                );
+                float3 col;
+                if (rimSoft > 0.01 && slope > 0.001) {
+                    // 边缘柔化：折射带内沿法线方向抹匀（宽度随斜面深度增长），
+                    // 压缩带从一条硬线变成一段渐变，采样点仍钳在内容区内
+                    float2 sm = n * (rimSoft * slope);
+                    float2 cR1 = clamp(cR - sm, lo, hi);
+                    float2 cR2 = clamp(cR + sm, lo, hi);
+                    float2 cG1 = clamp(cG - sm, lo, hi);
+                    float2 cG2 = clamp(cG + sm, lo, hi);
+                    float2 cB1 = clamp(cB - sm, lo, hi);
+                    float2 cB2 = clamp(cB + sm, lo, hi);
+                    col = float3(
+                        (content.eval(cR).r + content.eval(cR1).r + content.eval(cR2).r) / 3.0,
+                        (content.eval(cG).g + content.eval(cG1).g + content.eval(cG2).g) / 3.0,
+                        (content.eval(cB).b + content.eval(cB1).b + content.eval(cB2).b) / 3.0
+                    );
+                } else {
+                    col = float3(
+                        content.eval(cR).r,
+                        content.eval(cG).g,
+                        content.eval(cB).b
+                    );
+                }
 
                 // 饱和度（合并进同一 pass）；提饱和端走 vibrancy 曲线：低饱和
                 // 像素多提、高饱和像素少提、极亮像素保护，避免线性提饱和把浓色
@@ -228,7 +261,11 @@ internal class GlassLensRenderer {
     data class LensParams(
         val blurRadius: Float,
         val shape1CX: Float, val shape1CY: Float,
-        val shape1HW: Float, val shape1HH: Float, val radius1: Float,
+        val shape1HW: Float, val shape1HH: Float,
+        val radius1TL: Float, val radius1TR: Float, val radius1BR: Float, val radius1BL: Float,
+        // 透镜形状（平边方向延伸后的主形状；无平边时与 shape1 相同）
+        val lens1CX: Float, val lens1CY: Float, val lens1HW: Float, val lens1HH: Float,
+        val rimSoft: Float,     // 边缘柔化宽度（px）
         val shape2CX: Float, val shape2CY: Float,
         val shape2HW: Float, val shape2HH: Float, val radius2: Float,
         val blendK: Float,
@@ -354,7 +391,9 @@ internal class GlassLensRenderer {
         sh.setFloatUniform("margin", margin.toFloat())
         sh.setFloatUniform("viewSize", width.toFloat(), height.toFloat())
         sh.setFloatUniform("shape1", p.shape1CX, p.shape1CY, p.shape1HW, p.shape1HH)
-        sh.setFloatUniform("radius1", p.radius1)
+        sh.setFloatUniform("radii1", p.radius1TL, p.radius1TR, p.radius1BR, p.radius1BL)
+        sh.setFloatUniform("shape1L", p.lens1CX, p.lens1CY, p.lens1HW, p.lens1HH)
+        sh.setFloatUniform("rimSoft", p.rimSoft)
         sh.setFloatUniform("shape2", p.shape2CX, p.shape2CY, p.shape2HW, p.shape2HH)
         sh.setFloatUniform("radius2", p.radius2)
         sh.setFloatUniform("blendK", p.blendK)

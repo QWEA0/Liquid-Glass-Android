@@ -72,6 +72,9 @@ class EnhancedBlurEffect(
     // ✅ 圆角半径（用于优化捕获）
     var cornerRadius = 0f
 
+    /** 逐角圆角（8 值，Path.addRoundRect 顺序）；非 null 时优先于 cornerRadius 做裁剪 */
+    var cornerRadii: FloatArray? = null
+
     // ✅ 捕获扩展边距（用于模糊扩散，避免边缘裁切）
     // 建议值：blurRadius * 2
     var captureMargin = 0f
@@ -141,7 +144,12 @@ class EnhancedBlurEffect(
                     offsetX + captureBounds.right,
                     offsetY + captureBounds.bottom
                 )
-                clipPath.addRoundRect(clipRect, cornerRadius, cornerRadius, Path.Direction.CW)
+                val radii = cornerRadii
+                if (radii != null) {
+                    clipPath.addRoundRect(clipRect, radii, Path.Direction.CW)
+                } else {
+                    clipPath.addRoundRect(clipRect, cornerRadius, cornerRadius, Path.Direction.CW)
+                }
                 canvas.clipPath(clipPath)
             }
 
