@@ -70,22 +70,34 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     // ==================== 场景 ====================
 
     private enum class Scene(val labelRes: Int) {
-        SCROLL(R.string.scene_scroll),
-        IMAGE(R.string.scene_image),
-        ANIMATED(R.string.scene_animated),
-        MERGE(R.string.scene_merge),
+        PLAYGROUND(R.string.scene_playground),
         HOME(R.string.scene_home),
+        MERGE(R.string.scene_merge),
+        BACKDROP(R.string.scene_backdrop),
         LIST(R.string.scene_list),
-        SHEET(R.string.scene_sheet),
-        TEXT(R.string.scene_text),
-        SHOWCASE(R.string.scene_showcase),
+        OVERLAYS(R.string.scene_overlays),
         WIDGETS(R.string.scene_widgets),
-        GROUP(R.string.scene_group),
-        TINT(R.string.scene_tint),
-        NESTED(R.string.scene_nested)
+        TEXT(R.string.scene_text)
     }
 
-    private var currentScene = Scene.SCROLL
+    private var currentScene = Scene.PLAYGROUND
+
+    /** 调参场的背景：渐变 / 图片 / 动画光斑，场景内切换 */
+    private enum class PlaygroundBackdrop(val labelRes: Int) {
+        GRADIENT(R.string.playground_bg_gradient),
+        IMAGE(R.string.playground_bg_image),
+        ANIMATED(R.string.playground_bg_animated)
+    }
+
+    private var playgroundBackdrop = PlaygroundBackdrop.GRADIENT
+
+    /** backdropSource 场景的拓扑：兄弟子树 / 跨层级祖先 */
+    private enum class BackdropMode(val labelRes: Int, val hintRes: Int) {
+        SIBLING(R.string.backdrop_mode_sibling, R.string.backdrop_hint_sibling),
+        ANCESTOR(R.string.backdrop_mode_ancestor, R.string.backdrop_hint_ancestor)
+    }
+
+    private var backdropMode = BackdropMode.SIBLING
 
     // ==================== 视图 ====================
 
@@ -154,7 +166,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         private const val COLOR_ACCENT = 0xFF007AFF.toInt()   // 强调色
         private const val COLOR_SEG_BG = 0xFFE9E9EB.toInt()   // 分段控件底
 
-        /** TINT 场景的色板（名称 + 色相，取 iOS 系统色）；第一项是"取消染色" */
+        /** 抽屉染色卡片的色板（名称 + 色相，取 iOS 系统色）；第一项是"取消染色" */
         private val TINT_SWATCHES = listOf(
             R.string.tint_none to Color.TRANSPARENT,
             R.string.tint_blue to 0xFF0A84FF.toInt(),
@@ -184,7 +196,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         val requested = intent.getStringExtra("scene")?.let { name ->
             Scene.entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
         }
-        showScene(requested ?: Scene.SCROLL)
+        showScene(requested ?: Scene.PLAYGROUND)
         startPerformanceMonitoring()
     }
 
@@ -278,7 +290,11 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         // 不要用固定 dp 值：状态栏高度随刘海/挖孔变化，手势条与三键导航也差一倍。
         ViewCompat.setOnApplyWindowInsetsListener(mainContent) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val topChanged = bars.top != systemBarTop
             systemBarTop = bars.top
+            // 首个场景在 onCreate 里就建好了，那时 systemBarTop 还是 0；
+            // 靠它避开状态栏 / 性能悬浮窗的场景内控件要等 inset 到了再重建一次
+            if (topChanged) sceneHost.post { showScene(currentScene) }
             (tvPerformanceOverlay.layoutParams as FrameLayout.LayoutParams).apply {
                 topMargin = bars.top + dp(8)
                 rightMargin = bars.right + dp(8)
@@ -396,31 +412,23 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         glassView.setOnTouchListener(null)
         glassView.translationX = 0f
         glassView.translationY = 0f
-        // LIST 场景会把背景来源指到场景内的列表上，切走时必须解绑，
+        // BACKDROP 场景会把背景来源指到场景内的视图上，切走时必须解绑，
         // 否则其他场景的玻璃还在捕获一棵已经被移除的子树
         glassView.backdropSource = null
         // TEXT 场景会改软键盘模式，切走时还原
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-        // TINT 场景会给共享的 glassView 染色，切走时清掉——染色是 TINT 场景的局部演示，
-        // 不该跟着跑到别的场景里去
-        glassView.glassTint = Color.TRANSPARENT
-        // SHEET 场景的弹层在独立 window 里，不随 sceneHost 的清空而消失
+        // OVERLAYS 场景的弹层在独立 window 里，不随 sceneHost 的清空而消失
         dismissGlassBottomSheet()
 
         val root = when (scene) {
-            Scene.SCROLL -> buildScrollScene()
-            Scene.IMAGE -> buildImageScene()
-            Scene.ANIMATED -> buildAnimatedScene()
-            Scene.MERGE -> buildMergeScene()
+            Scene.PLAYGROUND -> buildPlaygroundScene()
             Scene.HOME -> buildHomeScene()
+            Scene.MERGE -> buildMergeScene()
+            Scene.BACKDROP -> buildBackdropScene()
             Scene.LIST -> buildListScene()
-            Scene.SHEET -> buildSheetScene()
-            Scene.TEXT -> buildTextScene()
-            Scene.SHOWCASE -> buildShowcaseScene()
+            Scene.OVERLAYS -> buildOverlaysScene()
             Scene.WIDGETS -> buildWidgetsScene()
-            Scene.GROUP -> buildGroupScene()
-            Scene.TINT -> buildTintScene()
-            Scene.NESTED -> buildNestedScene()
+            Scene.TEXT -> buildTextScene()
         }
         sceneHost.addView(root)
         updateSceneBar()
@@ -432,25 +440,148 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).apply { gravity = Gravity.CENTER }
 
-    /** 场景 1：彩色渐变滚动背景 + 顶部渐进模糊 + 玻璃按钮 */
-    private fun buildScrollScene(): View {
-        val root = FrameLayout(this)
-        val scroll = createColorScroll()
-        root.addView(scroll)
-
-        // 顶部渐进模糊（Scroll Edge Effect：内容滚入顶部时从清晰渐变到模糊）
-        val edgeBlur = ScrollEdgeBlurView(this).apply {
-            edge = ScrollEdgeBlurView.Edge.TOP
-            maxBlurRadius = dpF(14)
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, dp(110)
-            ).apply { gravity = Gravity.TOP }
+    /** 场景内顶部居中的切换条位置：让开状态栏和性能悬浮窗 */
+    private fun topToggleParams(): FrameLayout.LayoutParams =
+        FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            topMargin = systemBarTop + dp(96)
         }
-        edgeBlur.bindScrollView(scroll)
-        root.addView(edgeBlur)
+
+    /**
+     * 场景内的小切换条：深底胶囊里一排 chip，选中的白底加粗（与底部场景条同一套样式）。
+     * 选中态由这里维护，回调只管做事
+     */
+    private fun buildChipToggle(
+        labels: List<String>,
+        selectedIndex: Int,
+        onSelect: (Int) -> Unit
+    ): View {
+        val chips = mutableListOf<TextView>()
+        fun render(selected: Int) {
+            chips.forEachIndexed { i, chip ->
+                if (i == selected) {
+                    chip.background = GradientDrawable().apply {
+                        cornerRadius = dpF(18)
+                        setColor(Color.WHITE)
+                    }
+                    chip.setTextColor(COLOR_TEXT)
+                    chip.typeface = Typeface.DEFAULT_BOLD
+                } else {
+                    chip.background = null
+                    chip.setTextColor(0xFFDDDDDD.toInt())
+                    chip.typeface = Typeface.DEFAULT
+                }
+            }
+        }
+        val pill = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = GradientDrawable().apply {
+                cornerRadius = dpF(22)
+                setColor(0xB3000000.toInt())
+            }
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+        }
+        labels.forEachIndexed { i, label ->
+            val chip = TextView(this).apply {
+                text = label
+                textSize = 13f
+                gravity = Gravity.CENTER
+                maxLines = 1
+                setPadding(dp(16), dp(8), dp(16), dp(8))
+                setOnClickListener {
+                    render(i)
+                    onSelect(i)
+                }
+            }
+            chips += chip
+            pill.addView(chip)
+        }
+        render(selectedIndex)
+        return pill
+    }
+
+    /**
+     * 场景 1：调参场 —— 主玻璃 + 三种可切换的背景：
+     * - 渐变：彩色色块滚动 + 顶部渐进模糊（ScrollEdgeBlurView）
+     * - 图片：用户选的图或程序生成的风景图，平铺两份可滚动
+     * - 动画：渐变光斑持续运动，考验动态背景的实时性
+     *
+     * 抽屉里的参数直接作用在主玻璃上。背景 chip 挂在 stage 外面，不会被玻璃采进去
+     */
+    private fun buildPlaygroundScene(): View {
+        val root = FrameLayout(this)
+        val stage = FrameLayout(this)
+        root.addView(stage, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        when (playgroundBackdrop) {
+            PlaygroundBackdrop.GRADIENT -> {
+                val scroll = createColorScroll()
+                stage.addView(scroll)
+                // 顶部渐进模糊（Scroll Edge Effect：内容滚入顶部时从清晰渐变到模糊）
+                val edgeBlur = ScrollEdgeBlurView(this).apply {
+                    edge = ScrollEdgeBlurView.Edge.TOP
+                    maxBlurRadius = dpF(14)
+                    layoutParams = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT, dp(110)
+                    ).apply { gravity = Gravity.TOP }
+                }
+                edgeBlur.bindScrollView(scroll)
+                stage.addView(edgeBlur)
+            }
+            PlaygroundBackdrop.IMAGE -> {
+                val scroll = ScrollView(this).apply {
+                    layoutParams = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                    isVerticalScrollBarEnabled = false
+                }
+                val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                val bitmap = customBackgroundBitmap ?: getOrCreateScenicBitmap()
+                // 平铺 2 份以支持滚动
+                repeat(2) {
+                    content.addView(ImageView(this).apply {
+                        setImageBitmap(bitmap)
+                        scaleType = ImageView.ScaleType.FIT_XY
+                        adjustViewBounds = true
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        )
+                    })
+                }
+                scroll.addView(content)
+                stage.addView(scroll)
+            }
+            PlaygroundBackdrop.ANIMATED -> {
+                stage.addView(AnimatedBlobView(this).apply {
+                    layoutParams = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                })
+            }
+        }
 
         glassView.layoutParams = centerGlassParams()
-        root.addView(glassView)
+        stage.addView(glassView)
+
+        root.addView(
+            buildChipToggle(
+                PlaygroundBackdrop.entries.map { getString(it.labelRes) },
+                playgroundBackdrop.ordinal
+            ) { index ->
+                playgroundBackdrop = PlaygroundBackdrop.entries[index]
+                showScene(Scene.PLAYGROUND)
+            },
+            topToggleParams()
+        )
         return root
     }
 
@@ -734,16 +865,23 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     }
 
     /**
-     * 场景 6：列表 —— 玻璃悬浮在滚动列表上，背景由 [LiquidGlassView.backdropSource] 指定。
+     * 场景：背景源 —— 玻璃和背景**没有父子关系**，背景由 [LiquidGlassView.backdropSource] 指定；
+     * 默认的"捕获直接父容器"在这里只会拍到透明，画面全黑。两种拓扑可切换：
+     * - 兄弟子树：玻璃套在一层全透明的宿主容器里，backdropSource 指向旁边的列表内容，
+     *   滚动时的重绘由该 API 自动挂的滚动监听触发
+     * - 跨层级祖先：玻璃埋在 stage 下面两层容器里，backdropSource 直接指到 stage。
+     *   这是 issue #12 的崩溃条件：stage → 玻璃 路径上的中间容器此刻正在录制自己的
+     *   RenderNode，天真地 source.draw() 会对它重入 beginRecording；见 BackdropCapture
      *
-     * 和其他场景的关键区别：玻璃套在一层全透明的宿主容器里，和列表**没有父子关系**。
-     * 默认的"捕获直接父容器"在这里只会拍到透明，画面全黑；背景完全来自 backdropSource，
-     * 滚动时的重绘也由该 API 自动挂的滚动监听触发。
-     *
-     * 文字行提供高频边界，和桌面场景的图标网格一样适合观察折射与色散。
+     * 文字行提供高频边界，折射没对齐一眼能看出来。切换条和提示挂在 stage 外，不参与捕获。
      */
-    private fun buildListScene(): View {
+    private fun buildBackdropScene(): View {
         val root = FrameLayout(this)
+        val stage = FrameLayout(this)
+        root.addView(stage, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
 
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -759,55 +897,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 maxLines = 1
             })
         }
-        val scroll = ScrollView(this).apply {
-            isVerticalScrollBarEnabled = false
-            setBackgroundColor(COLOR_SCROLL_GUTTER)
-            addView(content)
-        }
-        root.addView(scroll, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-
-        // 玻璃挂在独立的透明子树里：背景只能靠 backdropSource 拿到
-        val isolatedHost = FrameLayout(this)
-        glassView.layoutParams = centerGlassParams()
-        glassView.backdropSource = content
-        isolatedHost.addView(glassView)
-        root.addView(isolatedHost, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-        return root
-    }
-
-    /**
-     * 场景 13：跨层级祖先背景 —— 玻璃埋在 root 下面两层容器里，
-     * backdropSource 直接指到 root。
-     *
-     * 这是 issue #12 的崩溃条件：root → 玻璃 路径上的中间容器此刻正在
-     * 录制自己的 RenderNode，天真地 source.draw() 会对它重入 beginRecording。
-     * 捕获怎么绕开重入和引用成环见 BackdropCapture。
-     */
-    private fun buildNestedScene(): View {
-        val root = FrameLayout(this)
-
-        // 背景：滑动条纹（同 LIST 场景，折射没对齐一眼能看出来）
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(80), 0, dp(160))
-        }
-        repeat(24) { i ->
-            content.addView(TextView(this).apply {
-                text = "ROW $i  ▍▍▍  ROW $i  ▍▍▍"
-                textSize = 20f
-                setTextColor(if (i % 2 == 0) Color.WHITE else 0xFFFFE066.toInt())
-                setBackgroundColor(if (i % 2 == 0) 0xFF1B3A6B.toInt() else 0xFF0B1D3A.toInt())
-                setPadding(dp(16), dp(16), dp(16), dp(16))
-                maxLines = 1
-            })
-        }
-        root.addView(ScrollView(this).apply {
+        stage.addView(ScrollView(this).apply {
             isVerticalScrollBarEnabled = false
             setBackgroundColor(COLOR_SCROLL_GUTTER)
             addView(content)
@@ -816,25 +906,47 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             FrameLayout.LayoutParams.MATCH_PARENT
         ))
 
-        // root > outer > inner > 玻璃：中间隔两层容器
-        val inner = FrameLayout(this).apply {
-            glassView.layoutParams = centerGlassParams()
-            addView(glassView)
+        glassView.layoutParams = centerGlassParams()
+        when (backdropMode) {
+            BackdropMode.SIBLING -> {
+                // 玻璃挂在独立的透明子树里：背景只能靠 backdropSource 拿到
+                val isolatedHost = FrameLayout(this)
+                isolatedHost.addView(glassView)
+                glassView.backdropSource = content
+                stage.addView(isolatedHost, FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                ))
+            }
+            BackdropMode.ANCESTOR -> {
+                // stage > outer > inner > 玻璃：中间隔两层容器
+                val inner = FrameLayout(this).apply { addView(glassView) }
+                val outer = FrameLayout(this).apply {
+                    addView(inner, FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    ))
+                }
+                glassView.backdropSource = stage
+                stage.addView(outer, FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                ))
+            }
         }
-        val outer = FrameLayout(this).apply {
-            addView(inner, FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            ))
-        }
-        glassView.backdropSource = root
-        root.addView(outer, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ))
 
+        root.addView(
+            buildChipToggle(
+                BackdropMode.entries.map { getString(it.labelRes) },
+                backdropMode.ordinal
+            ) { index ->
+                backdropMode = BackdropMode.entries[index]
+                showScene(Scene.BACKDROP)
+            },
+            topToggleParams()
+        )
         root.addView(TextView(this).apply {
-            text = getString(R.string.nested_hint)
+            text = getString(backdropMode.hintRes)
             textSize = 13f
             setTextColor(0xCCFFFFFF.toInt())
             setShadowLayer(6f, 0f, 1f, Color.BLACK)
@@ -852,7 +964,8 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     }
 
     /**
-     * 场景 7：底部弹层 —— 玻璃在 [BottomSheetDialog] 里，背景取自 Activity 的内容视图。
+     * 场景：弹层 —— 底部弹层 / 玻璃弹窗 / 玻璃 Toast 三个入口。
+     * 底部弹层的玻璃在 [BottomSheetDialog] 里，背景取自 Activity 的内容视图。
      *
      * 这是**跨 window** 的用法。弹层自带一个独立 window，玻璃在那个 window 里的直接父容器
      * 是透明的，默认的"捕获直接父容器"只会拍到空白，所以背景必须用
@@ -864,7 +977,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
      *   折射出来会比周围亮一截，所以 dimAmount 归零
      * - design_bottom_sheet 容器默认白底，不清成透明的话玻璃背后是一层白
      */
-    private fun buildSheetScene(): View {
+    private fun buildOverlaysScene(): View {
         val root = FrameLayout(this)
 
         root.addView(ImageView(this).apply {
@@ -1222,40 +1335,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         return scroll
     }
 
-    /** 场景 2：图片背景（用户图片或程序生成的风景图）+ 玻璃按钮 */
-    private fun buildImageScene(): View {
-        val root = FrameLayout(this)
-
-        val scroll = ScrollView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-            isVerticalScrollBarEnabled = false
-        }
-        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-
-        val bitmap = customBackgroundBitmap ?: getOrCreateScenicBitmap()
-        // 平铺 2 份以支持滚动
-        repeat(2) {
-            content.addView(ImageView(this).apply {
-                setImageBitmap(bitmap)
-                scaleType = ImageView.ScaleType.FIT_XY
-                adjustViewBounds = true
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-            })
-        }
-        scroll.addView(content)
-        root.addView(scroll)
-
-        glassView.layoutParams = centerGlassParams()
-        root.addView(glassView)
-        return root
-    }
-
+    /** 调参场"图片"背景的默认图：没选自定义图时程序生成一张风景 */
     private fun getOrCreateScenicBitmap(): Bitmap {
         scenicBitmap?.let { return it }
         val w = resources.displayMetrics.widthPixels.coerceAtLeast(320)
@@ -1323,21 +1403,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         return path
     }
 
-    /** 场景 3：动画渐变光斑背景 + 玻璃按钮（考验动态背景实时性） */
-    private fun buildAnimatedScene(): View {
-        val root = FrameLayout(this)
-        root.addView(AnimatedBlobView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        })
-        glassView.layoutParams = centerGlassParams()
-        root.addView(glassView)
-        return root
-    }
-
-    /** 动画光斑背景视图 */
+    /** 动画光斑背景视图（调参场的"动画"背景） */
     private class AnimatedBlobView(context: Context) : View(context) {
         private data class Blob(val color: Int, val phase: Float, val speed: Float, val rx: Float, val ry: Float, val radius: Float)
 
@@ -1389,82 +1455,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         }
     }
 
-    /** 场景 4：多玻璃组件展示（导航栏 / 卡片 / 圆形按钮 / 主按钮） */
-    private fun buildShowcaseScene(): View {
-        val root = FrameLayout(this)
-        root.addView(createColorScroll())
-
-        // 顶部玻璃导航栏
-        root.addView(newExtraGlass(dpF(24)).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, dp(56)
-            ).apply {
-                gravity = Gravity.TOP
-                setMargins(dp(16), systemBarTop + dp(58), dp(16), 0)  // 让开状态栏 + 性能悬浮窗
-            }
-            addView(TextView(this@ProfessionalDemoActivity).apply {
-                text = getString(R.string.showcase_navbar)
-                textSize = 16f
-                setTextColor(Color.WHITE)
-                gravity = Gravity.CENTER
-                setShadowLayer(6f, 0f, 1f, Color.BLACK)
-                layoutParams = FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
-                )
-            })
-        })
-
-        // 中央主按钮（复用主 glassView，面板参数直接生效）
-        glassView.layoutParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            gravity = Gravity.CENTER
-            topMargin = -dp(60)
-        }
-        root.addView(glassView)
-
-        // 信息卡片
-        root.addView(newExtraGlass(dpF(20)).apply {
-            layoutParams = FrameLayout.LayoutParams(dp(300), dp(110)).apply {
-                gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
-                bottomMargin = dp(150)
-            }
-            addView(TextView(this@ProfessionalDemoActivity).apply {
-                text = getString(R.string.showcase_card)
-                textSize = 15f
-                setTextColor(Color.WHITE)
-                gravity = Gravity.CENTER
-                setShadowLayer(6f, 0f, 1f, Color.BLACK)
-                layoutParams = FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
-                )
-            })
-        })
-
-        // 圆形玻璃按钮
-        root.addView(newExtraGlass(999f).apply {
-            layoutParams = FrameLayout.LayoutParams(dp(72), dp(72)).apply {
-                gravity = Gravity.START or Gravity.BOTTOM
-                setMargins(dp(24), 0, 0, dp(96))
-            }
-            addView(TextView(this@ProfessionalDemoActivity).apply {
-                text = "🎵"
-                textSize = 26f
-                gravity = Gravity.CENTER
-                layoutParams = FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
-                )
-            })
-        })
-
-        return root
-    }
-
-    /** 场景 10：现成小部件（LiquidGlassButton / LiquidGlassTabBar / LiquidGlassFab，全部库默认参数开箱展示） */
+    /** 场景：现成小部件（LiquidGlassButton / LiquidGlassTabBar / LiquidGlassFab，全部库默认参数开箱展示） */
     private fun buildWidgetsScene(): View {
         val root = FrameLayout(this)
         root.addView(createColorScroll())
@@ -1554,13 +1545,13 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     }
 
     /**
-     * 场景：M3 分组列表 —— 每一行是独立的 [LiquidGlassListItem]，装在 [LiquidGlassListGroup] 里，
+     * 场景：列表 —— 每一行是独立的 [LiquidGlassListItem]，装在 [LiquidGlassListGroup] 里，
      * 两种排布可切换：合并（行贴边拼成一块面板，只有组外沿有透镜边缘）和分离（每行独立圆角卡片）。
      *
      * 组是透明容器，直接父容器采不到壁纸，所以背景由组统一下发到每一行（backdropSource）。
      * 不指向 root：root 里还有其他玻璃行，互相采样会套娃。
      */
-    private fun buildGroupScene(): View {
+    private fun buildListScene(): View {
         val root = FrameLayout(this)
 
         // 背景：与文字场景同一张壁纸，两张上下拼接可滚动，单独一层给玻璃当 backdropSource
@@ -1631,7 +1622,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             )
         }
 
-        // 合并 / 分离切换（chip 样式与底部场景条一致）
+        // 合并 / 分离切换
         val hint = TextView(this).apply {
             textSize = 13f
             setTextColor(0xCCFFFFFF.toInt())
@@ -1639,58 +1630,27 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
         }
         val groups = mutableListOf<LiquidGlassListGroup>()
-        val chips = mutableListOf<Pair<TextView, LiquidGlassListGroup.Style>>()
         fun applyStyle(style: LiquidGlassListGroup.Style) {
             groups.forEach { it.style = style }
-            chips.forEach { (chip, s) ->
-                if (s == style) {
-                    chip.background = GradientDrawable().apply {
-                        cornerRadius = dpF(18)
-                        setColor(Color.WHITE)
-                    }
-                    chip.setTextColor(COLOR_TEXT)
-                    chip.typeface = Typeface.DEFAULT_BOLD
-                } else {
-                    chip.background = null
-                    chip.setTextColor(0xFFDDDDDD.toInt())
-                    chip.typeface = Typeface.DEFAULT
-                }
-            }
             hint.text = getString(
                 if (style == LiquidGlassListGroup.Style.MERGED) R.string.group_hint_merged
                 else R.string.group_hint_separated
             )
         }
-        val toggle = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            background = GradientDrawable().apply {
-                cornerRadius = dpF(22)
-                setColor(0xB3000000.toInt())
+        val styles = LiquidGlassListGroup.Style.entries
+        column.addView(
+            buildChipToggle(
+                listOf(getString(R.string.group_style_merged), getString(R.string.group_style_separated)),
+                0
+            ) { index -> applyStyle(styles[index]) },
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                bottomMargin = dp(20)
             }
-            setPadding(dp(6), dp(6), dp(6), dp(6))
-            listOf(
-                R.string.group_style_merged to LiquidGlassListGroup.Style.MERGED,
-                R.string.group_style_separated to LiquidGlassListGroup.Style.SEPARATED
-            ).forEach { (labelRes, style) ->
-                val chip = TextView(this@ProfessionalDemoActivity).apply {
-                    text = getString(labelRes)
-                    textSize = 13f
-                    gravity = Gravity.CENTER
-                    maxLines = 1
-                    setPadding(dp(16), dp(8), dp(16), dp(8))
-                    setOnClickListener { applyStyle(style) }
-                }
-                chips += chip to style
-                addView(chip)
-            }
-        }
-        column.addView(toggle, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            bottomMargin = dp(20)
-        })
+        )
 
         // 一组四行，每行点击展开；位置（首/中/末）由组按当前样式分配
         val group = newGroup()
@@ -1729,43 +1689,13 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     }
 
     /**
-     * 场景 11：彩色玻璃（glassTint）
-     *
-     * 上面的色板和强度滑杆直接改主玻璃的 glassTint，下面三个按钮各自钉死一种颜色——
-     * 一屏之内就能看出"同样的玻璃，不同的颜色"。
-     * 背景照旧用壁纸 + 图标网格：染色玻璃的通透感只有在高频背景上才成立，
-     * 铺一块纯色的话它看起来就只是一层半透明色板。
+     * 抽屉里的玻璃染色卡片：色板 + 强度滑杆，直接改当前场景所有玻璃的 glassTint。
+     * 染色跟其他参数一样跨场景保留，附加玻璃创建时由 syncGlassParams 带上。
      */
-    private fun buildTintScene(): View {
-        val root = FrameLayout(this)
+    private fun buildTintCard(root: LinearLayout) {
+        val card = addCard(root, getString(R.string.section_glass_tint))
 
-        // 玻璃捕获的是直接父容器，色板/滑杆挂在 stage 外面，免得被折射进玻璃里
-        val stage = FrameLayout(this)
-        root.addView(stage, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-
-        stage.addView(ImageView(this).apply {
-            setImageResource(R.drawable.ios_wallpaper)
-            scaleType = ImageView.ScaleType.CENTER_CROP
-        }, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-        stage.addView(HomeScreenGridView(this), FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-
-        // 主玻璃：色板 + 强度滑杆都作用在它身上
-        glassView.layoutParams = FrameLayout.LayoutParams(dp(300), dp(124)).apply {
-            gravity = Gravity.CENTER
-            topMargin = -dp(24)
-        }
-        stage.addView(glassView)
-
-        // 色板与强度的初值跟着主玻璃当前的染色走（切场景时 showScene 会清掉染色）
+        // 初值跟着主玻璃当前的染色走
         val current = glassView.glassTint
         var hueRes = R.string.tint_none
         var hue = if (Color.alpha(current) == 0) Color.TRANSPARENT else current or 0xFF000000.toInt()
@@ -1775,8 +1705,8 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         val readout = TextView(this).apply {
             textSize = 13f
             typeface = Typeface.MONOSPACE
-            setTextColor(0xFF4CFF7A.toInt())
-            setPadding(0, dp(8), 0, dp(2))
+            setTextColor(COLOR_TEXT)
+            setPadding(0, dp(8), 0, 0)
         }
         fun refreshReadout() {
             readout.text = if (hue == Color.TRANSPARENT) {
@@ -1805,75 +1735,17 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         }
         selectSwatch(hue)
 
-        // 固定颜色的玻璃按钮：一屏之内摆三种颜色。
-        // 必须直接挂在 stage 下——玻璃捕获直接父容器，套一层 LinearLayout 的话，
-        // 兄弟玻璃互相捕获时会重入这层容器的 display list（beginRecording 直接抛
-        // "Recording currently in progress"）。所以横向排布靠 FrameLayout 的
-        // 居中 gravity + 左右外边距偏移来做
-        listOf(
-            Triple(R.string.tint_pink, 0xFFFF375F.toInt(), -dp(108)),
-            Triple(R.string.tint_green, 0xFF30D158.toInt(), 0),
-            Triple(R.string.tint_purple, 0xFFBF5AF2.toInt(), dp(108))
-        ).forEach { (labelRes, color, offsetX) ->
-            stage.addView(LiquidGlassButton(this).apply {
-                enableDynamicBackground = true
-                text = getString(labelRes)
-                setTextSize(13f)
-                // 库默认的折射/斜面是按大块玻璃调的，落在这种小胶囊上整块都是边缘带，
-                // 背景被压缩得比染色还抢眼；缩小两个数值留出平坦的中心区，颜色才读得出来
-                refractionHeight = 90f
-                bevelWidth = 24f
-                // 固定 50%——这几个按钮是拿来对比色相的，强度统一、给足才看得出差别
-                setGlassTint(color, 0.5f)
-                setOnClickListener {
-                    hueRes = labelRes
-                    hue = color
-                    strength = 0.5f
-                    selectSwatch(color)
-                    applyTint()
-                }
-                layoutParams = FrameLayout.LayoutParams(dp(100), dp(76)).apply {
-                    gravity = Gravity.CENTER
-                    topMargin = dp(136)
-                    if (offsetX < 0) rightMargin = -offsetX else leftMargin = offsetX
-                }
-            })
-        }
-
-        // 控制条：色板 + 强度滑杆（在 stage 外，不参与背景捕获）
-        val controls = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = GradientDrawable().apply {
-                cornerRadius = dpF(18)
-                setColor(0x8C000000.toInt())
-            }
-            setPadding(dp(16), dp(12), dp(16), dp(10))
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                gravity = Gravity.TOP
-                topMargin = systemBarTop + dp(58)  // 让开状态栏 + 性能悬浮窗
-                marginStart = dp(16)
-                marginEnd = dp(16)
-            }
-        }
-        controls.addView(TextView(this).apply {
-            text = getString(R.string.tint_scene_hint)
-            textSize = 12f
-            setTextColor(0xCCFFFFFF.toInt())
-        })
         // 色板一行放不下就横向滚动（窄屏 + 9 个色块）
-        controls.addView(HorizontalScrollView(this).apply {
+        card.addView(HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             addView(swatchRow)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(10) }
+            ).apply { topMargin = dp(8) }
         })
-        controls.addView(readout)
-        controls.addView(SeekBar(this).apply {
+        card.addView(readout)
+        card.addView(SeekBar(this).apply {
             max = 100
             progress = (strength * 100).toInt()
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -1892,22 +1764,13 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 override fun onStopTrackingTouch(sb: SeekBar?) {}
             })
         })
-        controls.addView(TextView(this).apply {
-            text = getString(R.string.tint_preset_hint)
-            textSize = 11f
-            setTextColor(0x99FFFFFF.toInt())
-            setPadding(0, dp(6), 0, 0)
-        })
-        root.addView(controls)
-
-        applyTint()
-        return root
+        refreshReadout()
     }
 
     /**
-     * 圆形色板行
+     * 圆形色板行（浅色抽屉底上用）
      *
-     * @return 行视图 + 一个"按颜色回选"的回调（点固定色按钮时用来同步选中态）
+     * @return 行视图 + 一个"按颜色回选"的回调（外部改了颜色时用来同步选中态）
      */
     private fun buildTintSwatchRow(
         onPick: (labelRes: Int, color: Int) -> Unit
@@ -1924,11 +1787,11 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 val color = TINT_SWATCHES[i].second
                 dot.background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
-                    // "无染色"没有颜色可画，给一块半透明白当占位
-                    setColor(if (color == Color.TRANSPARENT) 0x33FFFFFF else color)
+                    // "无染色"没有颜色可画，给一块浅灰当占位
+                    setColor(if (color == Color.TRANSPARENT) COLOR_SEG_BG else color)
                     setStroke(
                         dp(if (i == selected) 3 else 1),
-                        if (i == selected) Color.WHITE else 0x66FFFFFF
+                        if (i == selected) COLOR_ACCENT else 0x33000000
                     )
                 }
             }
@@ -2156,6 +2019,9 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             { getString(R.string.highlight_opacity, it.toFloat()) }) { p ->
             applyGlass { it.edgeHighlightOpacity = p.toFloat() }
         }
+
+        // ---------- 玻璃染色 ----------
+        buildTintCard(root)
 
         // ---------- 交互 · 点击效果 ----------
         val interactionCard = addCard(root, getString(R.string.section_interaction))
@@ -2729,7 +2595,8 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             if (bitmap != null) {
                 customBackgroundBitmap?.recycle()
                 customBackgroundBitmap = bitmap
-                showScene(Scene.IMAGE)
+                playgroundBackdrop = PlaygroundBackdrop.IMAGE
+                showScene(Scene.PLAYGROUND)
                 drawerLayout.closeDrawer(GravityCompat.END)
                 showGlassToast(getString(R.string.toast_image_selected))
             } else {

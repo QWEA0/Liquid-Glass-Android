@@ -108,7 +108,7 @@ If you're Compose-first, use Kyant0's — don't wrap this one in an `AndroidView
 
 </div>
 
-Run the sample app for the full playground (4 scenes + a live parameter drawer), or launch the
+Run the sample app for the full playground (8 scenes + a live parameter drawer), or launch the
 hero scene used for the screenshots at the top:
 
 ```bash
@@ -355,7 +355,7 @@ repaints the glass automatically. Note that glass inside a `ScrollView` scrollin
 content sees a fixed backdrop by definition — that's physically correct, not a bug.
 
 **Can I put glass in a `Dialog` / `BottomSheetDialog` / `PopupWindow`?**
-Yes — the demo app's **Sheet** scene is a working `BottomSheetDialog`. Three things differ
+Yes — the demo app's **Overlays** scene is a working `BottomSheetDialog`. Three things differ
 from the in-activity case:
 
 1. **The backdrop must be `backdropSource`.** A dialog has its own window, so the glass's
@@ -559,7 +559,7 @@ Inspired by the glassmorphism design trend and liquid-glass-react library.
 
 </div>
 
-跑 sample app 可以看到完整调参场（4 个场景 + 实时参数抽屉），或者直接启动首屏用的 hero 场景：
+跑 sample app 可以看到完整调参场（8 个场景 + 实时参数抽屉），或者直接启动首屏用的 hero 场景：
 
 ```bash
 adb shell am start -n com.example.liquidglass/com.example.liquidglass.HeroShowcaseActivity

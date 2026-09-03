@@ -143,10 +143,10 @@
     <string name="optimized_capture_desc">• 启用：仅捕获圆角内区域，降低渲染量\n• 禁用：捕获完整矩形区域\n\n适用场景：圆角按钮、圆角卡片\n性能提升：约 5-8%</string>
 
     <!-- 演示场景 -->
-    <string name="scene_scroll">滚动</string>
-    <string name="scene_image">图片</string>
-    <string name="scene_animated">动画</string>
-    <string name="scene_showcase">组件</string>
+    <string name="scene_playground">调参</string>
+    <string name="playground_bg_gradient">渐变</string>
+    <string name="playground_bg_image">图片</string>
+    <string name="playground_bg_animated">动画</string>
 
     <!-- 现代面板 -->
     <string name="section_glass_params">玻璃参数（GPU + CPU 通用）</string>
@@ -179,7 +179,7 @@
     <string name="text_scene_hint">输入文字，实时变成玻璃</string>
     <string name="text_scene_apply">应用</string>
     <string name="text_scene_default">液态玻璃</string>
-    <string name="scene_sheet">弹层</string>
+    <string name="scene_overlays">弹层</string>
     <string name="sheet_open">打开底部弹层</string>
     <string name="sheet_title">跨 window 的玻璃</string>
     <string name="sheet_body">弹层有独立 window，背景靠 backdropSource 指到 Activity 的内容视图。</string>
@@ -217,8 +217,6 @@
     <string name="param_tint">染色浓度</string>
     <string name="param_tint_light">染色：亮（点击切换）</string>
     <string name="param_tint_dark">染色：暗（点击切换）</string>
-    <string name="showcase_navbar">🧭  液态玻璃导航栏</string>
-    <string name="showcase_card">💳  玻璃卡片\n模糊 · 色差 · 高光</string>
 
     <!-- 小部件场景（现成组件） -->
     <string name="scene_widgets">小部件</string>
@@ -231,8 +229,7 @@
     <string name="widgets_toast_tab">标签：%1$s</string>
     <string name="widgets_toast_fab">点击了 FAB</string>
 
-    <!-- 分组场景（M3 分组列表项） -->
-    <string name="scene_group">分组</string>
+    <!-- 列表场景（M3 列表项，合并 / 分离） -->
     <string name="group_style_merged">合并</string>
     <string name="group_style_separated">分离</string>
     <string name="group_hint_merged">合并：行与行贴边拼成一块，只有组的外沿有透镜边缘。</string>
@@ -252,12 +249,10 @@
     <string name="group_notif_detail">已静音：邮件、Slack、天气\n勿扰：23:00 – 07:00</string>
     <string name="group_display_detail">亮度跟随环境光。\n刷新率：流畅（最高 90 Hz）</string>
 
-    <!-- 染色场景（彩色玻璃） -->
-    <string name="scene_tint">染色</string>
-    <string name="tint_scene_hint">选个颜色、拖一下强度，就是一句 glassTint。</string>
+    <!-- 玻璃染色（抽屉卡片） -->
+    <string name="section_glass_tint">玻璃染色</string>
     <string name="tint_readout">%1$s · %2$s · %3$d%%</string>
     <string name="tint_readout_none">未染色 · glassTint = 0</string>
-    <string name="tint_preset_hint">下面三个是固定颜色的玻璃按钮，点一下把颜色抄给主玻璃</string>
     <string name="tint_none">无</string>
     <string name="tint_blue">蓝</string>
     <string name="tint_cyan">青</string>
@@ -268,8 +263,11 @@
     <string name="tint_pink">粉</string>
     <string name="tint_purple">紫</string>
 
-    <!-- 嵌套场景（跨层级祖先背景） -->
-    <string name="scene_nested">嵌套</string>
-    <string name="nested_hint">玻璃埋在两层容器里，backdropSource 直接指向场景根布局。</string>
+    <!-- 背景源场景（backdropSource 的两种拓扑） -->
+    <string name="scene_backdrop">背景源</string>
+    <string name="backdrop_mode_sibling">兄弟子树</string>
+    <string name="backdrop_mode_ancestor">跨层祖先</string>
+    <string name="backdrop_hint_sibling">玻璃在列表旁边的透明宿主里，backdropSource 指向列表内容。</string>
+    <string name="backdrop_hint_ancestor">玻璃埋在两层容器里，backdropSource 直接指向场景根布局。</string>
 </resources>
 

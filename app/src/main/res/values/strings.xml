@@ -143,10 +143,10 @@
     <string name="optimized_capture_desc">• Enabled: Capture only rounded corner area, reduce rendering\n• Disabled: Capture full rectangular area\n\nUse cases: Rounded buttons, rounded cards\nPerformance gain: ~5-8%</string>
 
     <!-- Demo Scenes -->
-    <string name="scene_scroll">Scroll</string>
-    <string name="scene_image">Image</string>
-    <string name="scene_animated">Animated</string>
-    <string name="scene_showcase">Showcase</string>
+    <string name="scene_playground">Playground</string>
+    <string name="playground_bg_gradient">Gradient</string>
+    <string name="playground_bg_image">Image</string>
+    <string name="playground_bg_animated">Animated</string>
 
     <!-- Modern Panel -->
     <string name="section_glass_params">Glass Parameters (GPU + CPU)</string>
@@ -179,7 +179,7 @@
     <string name="text_scene_hint">Type anything — it becomes glass</string>
     <string name="text_scene_apply">Apply</string>
     <string name="text_scene_default">Liquid</string>
-    <string name="scene_sheet">Sheet</string>
+    <string name="scene_overlays">Overlays</string>
     <string name="sheet_open">Open bottom sheet</string>
     <string name="sheet_title">Glass in a separate window</string>
     <string name="sheet_body">The sheet has its own window, so the backdrop comes from the activity content view via backdropSource.</string>
@@ -217,8 +217,6 @@
     <string name="param_tint">Tint alpha</string>
     <string name="param_tint_light">Tint: light (tap to toggle)</string>
     <string name="param_tint_dark">Tint: dark (tap to toggle)</string>
-    <string name="showcase_navbar">🧭  Liquid NavBar</string>
-    <string name="showcase_card">💳  Glass Card\nBlur · Aberration · Highlight</string>
 
     <!-- Widgets Scene (ready-made components) -->
     <string name="scene_widgets">Widgets</string>
@@ -231,8 +229,7 @@
     <string name="widgets_toast_tab">Tab: %1$s</string>
     <string name="widgets_toast_fab">FAB clicked</string>
 
-    <!-- Group Scene (M3 grouped list items) -->
-    <string name="scene_group">Group</string>
+    <!-- List Scene (M3 list items, merged / separated) -->
     <string name="group_style_merged">Merged</string>
     <string name="group_style_separated">Separated</string>
     <string name="group_hint_merged">Merged: rows share flat edges, only the group outline refracts.</string>
@@ -252,12 +249,10 @@
     <string name="group_notif_detail">Muted: Mail, Slack, Weather\nDo Not Disturb: 23:00 – 07:00</string>
     <string name="group_display_detail">Brightness follows ambient light.\nRefresh rate: Smooth (up to 90 Hz)</string>
 
-    <!-- Tint Scene (coloured glass) -->
-    <string name="scene_tint">Tint</string>
-    <string name="tint_scene_hint">Pick a colour, drag the strength — that is one glassTint call.</string>
+    <!-- Glass Tint (drawer card) -->
+    <string name="section_glass_tint">Glass Tint</string>
     <string name="tint_readout">%1$s · %2$s · %3$d%%</string>
     <string name="tint_readout_none">No tint · glassTint = 0</string>
-    <string name="tint_preset_hint">Fixed-tint glass buttons — tap one to copy its colour</string>
     <string name="tint_none">None</string>
     <string name="tint_blue">Blue</string>
     <string name="tint_cyan">Cyan</string>
@@ -268,8 +263,11 @@
     <string name="tint_pink">Pink</string>
     <string name="tint_purple">Purple</string>
 
-    <!-- Nested Scene (cross-level ancestor backdrop) -->
-    <string name="scene_nested">Nested</string>
-    <string name="nested_hint">Glass sits two containers deep; backdropSource points at the scene root.</string>
+    <!-- Backdrop Scene (backdropSource topologies) -->
+    <string name="scene_backdrop">Backdrop</string>
+    <string name="backdrop_mode_sibling">Sibling</string>
+    <string name="backdrop_mode_ancestor">Ancestor</string>
+    <string name="backdrop_hint_sibling">Glass sits in a transparent host beside the list; backdropSource points at the list content.</string>
+    <string name="backdrop_hint_ancestor">Glass sits two containers deep; backdropSource points at the scene root.</string>
 </resources>
 
