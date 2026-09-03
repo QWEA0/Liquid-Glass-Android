@@ -186,6 +186,8 @@
     <string name="sheet_dialog_open">打开玻璃弹窗</string>
     <string name="sheet_dialog_title">玻璃弹窗</string>
     <string name="sheet_dialog_body">Material 弹窗的整个面板套在 LiquidGlassView 里。</string>
+    <string name="sheet_toast_open">弹一条玻璃 Toast</string>
+    <string name="sheet_toast_text">玻璃 Toast · 画在 Activity 的 window 里</string>
     <string name="simulate_api_label">模拟 API 级别</string>
     <string name="api_cap_device">跟随设备</string>
     <string name="simulate_api_desc">把管线分层钳制到指定级别，预览低版本机型效果：36+ AGSL 颜色滤镜/混合增强 · 33–35 透镜 · 31–32 经典 GPU · ≤30 CPU。悬浮层显示 实际 → 生效 API。</string>
@@ -231,7 +233,10 @@
 
     <!-- 分组场景（M3 分组列表项） -->
     <string name="scene_group">分组</string>
-    <string name="group_hint">每一行都是独立的玻璃 view，位置决定圆哪几个角。</string>
+    <string name="group_style_merged">合并</string>
+    <string name="group_style_separated">分离</string>
+    <string name="group_hint_merged">合并：行与行贴边拼成一块，只有组的外沿有透镜边缘。</string>
+    <string name="group_hint_separated">分离：每一行都是独立的圆角卡片，行间留空。</string>
     <string name="group_wifi_title">Wi‑Fi</string>
     <string name="group_wifi_sub">已连接 · Home 5G</string>
     <string name="group_bt_title">蓝牙</string>

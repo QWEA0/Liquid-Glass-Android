@@ -91,6 +91,21 @@
         <attr name="android:textColor" />
     </declare-styleable>
 
+    <!-- 现成小部件：列表组（装 LiquidGlassListItem 的竖向容器，自动分配位置与间距） -->
+    <declare-styleable name="LiquidGlassListGroup">
+        <!-- merged：行贴边拼成一块面板；separated：每行独立圆角卡片 -->
+        <attr name="glassListStyle" format="enum">
+            <enum name="merged" value="0" />
+            <enum name="separated" value="1" />
+        </attr>
+        <!-- 分离样式的行间距（默认 8dp） -->
+        <attr name="glassItemSpacing" format="dimension" />
+        <!-- 合并样式 = 组外沿圆角，分离样式 = 每张卡片的圆角；不填 = 自动（20dp / 12dp） -->
+        <attr name="cornerRadius" />
+        <!-- 下发给每一行的背景来源 -->
+        <attr name="backdropSourceId" />
+    </declare-styleable>
+
     <!-- 现成小部件：玻璃标签条（entries 指向 string-array） -->
     <declare-styleable name="LiquidGlassTabBar">
         <attr name="glassTabEntries" format="reference" />

@@ -29,6 +29,7 @@ import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
@@ -135,7 +136,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) openImagePicker()
-        else Toast.makeText(this, getString(R.string.toast_no_image_selected), Toast.LENGTH_SHORT).show()
+        else showGlassToast(getString(R.string.toast_no_image_selected))
     }
 
     companion object {
@@ -892,12 +893,33 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 text = getString(R.string.sheet_dialog_open)
                 setOnClickListener { showGlassDialog() }
             })
+            addView(Button(this@ProfessionalDemoActivity).apply {
+                text = getString(R.string.sheet_toast_open)
+                setOnClickListener {
+                    showGlassToast(
+                        getString(R.string.sheet_toast_text),
+                        applicationInfo.loadIcon(packageManager)
+                    )
+                }
+            })
         }, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).apply { gravity = Gravity.CENTER })
 
         return root
+    }
+
+    /**
+     * 玻璃 Toast：挂在 Activity 的 content view 上，背景就是当前场景。
+     * 底部抬高到场景条和设置按钮之上；彩色图标（应用图标）不跟文字染色
+     */
+    private fun showGlassToast(text: CharSequence, icon: Drawable? = null) {
+        LiquidGlassToast.makeText(this, text, LiquidGlassToast.LENGTH_SHORT)
+            .setIcon(icon)
+            .setIconTintEnabled(false)
+            .setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, dp(150))
+            .show()
     }
 
     /** 玻璃弹窗：面板整个套进 LiquidGlassView，背景来自 Activity 的 content view */
@@ -1464,11 +1486,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 LiquidGlassTabBar.TabItem(title, ContextCompat.getDrawable(this@ProfessionalDemoActivity, iconRes))
             })
             onTabSelected = { index ->
-                Toast.makeText(
-                    this@ProfessionalDemoActivity,
-                    getString(R.string.widgets_toast_tab, tabTitles[index]),
-                    Toast.LENGTH_SHORT
-                ).show()
+                showGlassToast(getString(R.string.widgets_toast_tab, tabTitles[index]))
             }
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -1487,11 +1505,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             enableDynamicBackground = true
             text = getString(R.string.widgets_button_regular)
             setOnClickListener {
-                Toast.makeText(
-                    this@ProfessionalDemoActivity,
-                    getString(R.string.widgets_toast_button, text),
-                    Toast.LENGTH_SHORT
-                ).show()
+                showGlassToast(getString(R.string.widgets_toast_button, text))
             }
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -1507,11 +1521,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             material = GlassMaterial.CLEAR
             text = getString(R.string.widgets_button_clear)
             setOnClickListener {
-                Toast.makeText(
-                    this@ProfessionalDemoActivity,
-                    getString(R.string.widgets_toast_button, text),
-                    Toast.LENGTH_SHORT
-                ).show()
+                showGlassToast(getString(R.string.widgets_toast_button, text))
             }
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -1527,11 +1537,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             enableDynamicBackground = true
             setIconResource(android.R.drawable.ic_input_add)
             setOnClickListener {
-                Toast.makeText(
-                    this@ProfessionalDemoActivity,
-                    getString(R.string.widgets_toast_fab),
-                    Toast.LENGTH_SHORT
-                ).show()
+                showGlassToast(getString(R.string.widgets_toast_fab))
             }
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -1548,10 +1554,11 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     }
 
     /**
-     * 场景：M3 分组列表 —— 每一行是独立的 [LiquidGlassListItem]，位置决定圆哪几个角。
+     * 场景：M3 分组列表 —— 每一行是独立的 [LiquidGlassListItem]，装在 [LiquidGlassListGroup] 里，
+     * 两种排布可切换：合并（行贴边拼成一块面板，只有组外沿有透镜边缘）和分离（每行独立圆角卡片）。
      *
-     * 行放在一个透明的 LinearLayout 里，直接父容器采不到壁纸，所以背景统一指到
-     * 壁纸层（backdropSource）。不指向 root：root 里还有其他玻璃行，互相采样会套娃。
+     * 组是透明容器，直接父容器采不到壁纸，所以背景由组统一下发到每一行（backdropSource）。
+     * 不指向 root：root 里还有其他玻璃行，互相采样会套娃。
      */
     private fun buildGroupScene(): View {
         val root = FrameLayout(this)
@@ -1601,8 +1608,6 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             detailRes: Int? = null,
             trailingRes: Int? = null
         ) = LiquidGlassListItem(this).apply {
-            enableDynamicBackground = true
-            backdropSource = backdrop
             headline = getString(titleRes)
             supportingText = subRes?.let { getString(it) }
             setLeadingIconResource(iconRes)
@@ -1614,8 +1619,82 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             }
         }
 
-        // 一组四行：首行圆上角、末行圆下角、中间直角；每行点击展开
-        val group = listOf(
+        // 背景来源和动态背景由组下发到每一行，行自己不用再设
+        fun newGroup() = LiquidGlassListGroup(this).apply {
+            enableDynamicBackground = true
+            backdropSource = backdrop
+        }
+        val rowParams = {
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        // 合并 / 分离切换（chip 样式与底部场景条一致）
+        val hint = TextView(this).apply {
+            textSize = 13f
+            setTextColor(0xCCFFFFFF.toInt())
+            setShadowLayer(6f, 0f, 1f, Color.BLACK)
+            gravity = Gravity.CENTER
+        }
+        val groups = mutableListOf<LiquidGlassListGroup>()
+        val chips = mutableListOf<Pair<TextView, LiquidGlassListGroup.Style>>()
+        fun applyStyle(style: LiquidGlassListGroup.Style) {
+            groups.forEach { it.style = style }
+            chips.forEach { (chip, s) ->
+                if (s == style) {
+                    chip.background = GradientDrawable().apply {
+                        cornerRadius = dpF(18)
+                        setColor(Color.WHITE)
+                    }
+                    chip.setTextColor(COLOR_TEXT)
+                    chip.typeface = Typeface.DEFAULT_BOLD
+                } else {
+                    chip.background = null
+                    chip.setTextColor(0xFFDDDDDD.toInt())
+                    chip.typeface = Typeface.DEFAULT
+                }
+            }
+            hint.text = getString(
+                if (style == LiquidGlassListGroup.Style.MERGED) R.string.group_hint_merged
+                else R.string.group_hint_separated
+            )
+        }
+        val toggle = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = GradientDrawable().apply {
+                cornerRadius = dpF(22)
+                setColor(0xB3000000.toInt())
+            }
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+            listOf(
+                R.string.group_style_merged to LiquidGlassListGroup.Style.MERGED,
+                R.string.group_style_separated to LiquidGlassListGroup.Style.SEPARATED
+            ).forEach { (labelRes, style) ->
+                val chip = TextView(this@ProfessionalDemoActivity).apply {
+                    text = getString(labelRes)
+                    textSize = 13f
+                    gravity = Gravity.CENTER
+                    maxLines = 1
+                    setPadding(dp(16), dp(8), dp(16), dp(8))
+                    setOnClickListener { applyStyle(style) }
+                }
+                chips += chip to style
+                addView(chip)
+            }
+        }
+        column.addView(toggle, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = dp(20)
+        })
+
+        // 一组四行，每行点击展开；位置（首/中/末）由组按当前样式分配
+        val group = newGroup()
+        listOf(
             row(R.string.group_wifi_title, R.string.group_wifi_sub, R.drawable.ic_tab_home,
                 detailRes = R.string.group_wifi_detail),
             row(R.string.group_bt_title, R.string.group_bt_sub, R.drawable.ic_tab_explore,
@@ -1624,38 +1703,28 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 detailRes = R.string.group_notif_detail),
             row(R.string.group_display_title, R.string.group_display_sub, android.R.drawable.ic_menu_view,
                 detailRes = R.string.group_display_detail, trailingRes = R.string.group_display_trailing)
-        )
-        LiquidGlassListItem.applyGroupPositions(group)
-        group.forEach { column.addView(it, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        )) }
+        ).forEach { group.addView(it, rowParams()) }
+        groups += group
+        column.addView(group, rowParams())
 
         // 单独一行：四角全圆，不可展开
-        val single = row(R.string.group_signout_title, null, android.R.drawable.ic_lock_power_off)
-        single.position = LiquidGlassListItem.Position.SINGLE
-        column.addView(single, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = dp(24) })
+        val single = newGroup()
+        single.addView(
+            row(R.string.group_signout_title, null, android.R.drawable.ic_lock_power_off),
+            rowParams()
+        )
+        groups += single
+        column.addView(single, rowParams().apply { topMargin = dp(24) })
 
-        column.addView(TextView(this).apply {
-            text = getString(R.string.group_hint)
-            textSize = 13f
-            setTextColor(0xCCFFFFFF.toInt())
-            setShadowLayer(6f, 0f, 1f, Color.BLACK)
-            gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = dp(20) })
+        column.addView(hint, rowParams().apply { topMargin = dp(20) })
+        applyStyle(LiquidGlassListGroup.Style.MERGED)
 
         root.addView(column, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).apply { gravity = Gravity.CENTER })
 
-        statsSource = group.first()
+        statsSource = group.getChildAt(0) as LiquidGlassView
         return root
     }
 
@@ -2662,13 +2731,13 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 customBackgroundBitmap = bitmap
                 showScene(Scene.IMAGE)
                 drawerLayout.closeDrawer(GravityCompat.END)
-                Toast.makeText(this, getString(R.string.toast_image_selected), Toast.LENGTH_SHORT).show()
+                showGlassToast(getString(R.string.toast_image_selected))
             } else {
-                Toast.makeText(this, getString(R.string.toast_no_image_selected), Toast.LENGTH_SHORT).show()
+                showGlassToast(getString(R.string.toast_no_image_selected))
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load image", e)
-            Toast.makeText(this, getString(R.string.toast_no_image_selected), Toast.LENGTH_SHORT).show()
+            showGlassToast(getString(R.string.toast_no_image_selected))
         }
     }
 

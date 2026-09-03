@@ -163,9 +163,10 @@ Wrong enum constants are the usual cause of a failed build. These are the only v
 - `LiquidGlassView.frameStatsListener` / `FrameStats` — per-frame render timings.
 - `ScrollEdgeBlurView` — progressive scroll-edge blur. `edge`, `maxBlurRadius`,
   `bindScrollView(view)`.
-- Ready-made widgets — all subclasses of `LiquidGlassView` (every glass property applies;
-  `setOnClickListener` works; with `enableAdaptiveTint = true` the foreground auto-flips
-  light/dark until an explicit color is set):
+- Ready-made widgets — the button, FAB, tab bar and list item are `LiquidGlassView`
+  subclasses (every glass property applies; `setOnClickListener` works; with
+  `enableAdaptiveTint = true` the foreground auto-flips light/dark until an explicit color
+  is set):
   - `LiquidGlassButton` — pill button with centered label. XML `android:text` /
     `android:textSize` / `android:textColor`; Kotlin `text`, `setTextColor(color)`, `textView`.
   - `LiquidGlassFab` — circular 56dp icon button. XML `android:src` / `app:glassIconTint`;
@@ -180,6 +181,44 @@ Wrong enum constants are the usual cause of a failed build. These are the only v
     null = auto white/black by backdrop luminance; set a color for a brand tint). XML
     `app:glassTabEntries` (string-array, text-only). `setTabs` resets selection to 0
     without firing the callback; setting `selectedIndex` fires it.
+  - `LiquidGlassListItem` — Material 3 list item (leading icon → headline / supporting
+    text → trailing text / icon; 56dp one-line, 72dp two-line). `position:
+    LiquidGlassListItem.Position` = `SINGLE` / `FIRST` / `MIDDLE` / `LAST` decides which
+    corners round (`groupCornerRadius`, default 20dp) and which edges are flat, so stacked
+    rows read as one panel with a single refracting outline. `expandedView: View?` enables
+    tap-to-expand (`setExpanded(expanded, animate)`, `isExpanded`, `onExpandedChanged`,
+    `expandOnClick`, `rotateTrailingIconOnExpand`). Kotlin `headline`, `supportingText`,
+    `trailingText`, `leadingIcon` / `setLeadingIconResource(id)`, `trailingIcon` /
+    `setTrailingIconResource(id)`, `setTextColor(color)`; static
+    `applyGroupPositions(items)` and `positionFor(index, count)` (for RecyclerView
+    adapters). XML `app:glassHeadline`, `app:glassSupportingText`, `app:glassLeadingIcon`,
+    `app:glassTrailingIcon`, `app:glassTrailingText`, `app:glassListPosition`
+    (`single|first|middle|last`), `app:glassGroupCornerRadius`, `app:glassInnerCornerRadius`.
+    Each row is its own `LiquidGlassView`, so use it for settings pages and menus, not
+    infinite feeds.
+- `LiquidGlassListGroup` — a vertical `LinearLayout` (not a `LiquidGlassView`) that holds
+  `LiquidGlassListItem` rows. `style: LiquidGlassListGroup.Style` = `MERGED` (rows share
+  flat edges, only the group outline refracts — iOS grouped / M3 list) or `SEPARATED`
+  (every row is a rounded card with `itemSpacing` px between, default 8dp). `cornerRadius`
+  (px; negative = auto: 20dp merged / 12dp separated). Positions are reassigned whenever
+  children are added or removed or `style` changes; call `applyPositions()` after toggling
+  a row's visibility. The group is transparent, so the rows cannot capture it: set the
+  group's `backdropSource` (pushed to every row) and `enableDynamicBackground`. XML
+  `app:glassListStyle` (`merged|separated`), `app:glassItemSpacing`, `app:cornerRadius`,
+  `app:backdropSourceId`. The group owns the vertical gap between rows and overwrites the
+  children's `topMargin`.
+- `LiquidGlassToast` — glass toast drawn inside the activity window, not in a `Toast`
+  window (a `Toast` window cannot refract the app beneath it, and custom toast views are
+  deprecated since API 30). `LiquidGlassToast.makeText(context, text | resId, duration)`
+  needs an Activity context (throws otherwise); `LENGTH_SHORT` / `LENGTH_LONG` equal
+  `Toast`'s constants (2 s / 3.5 s), `durationMillis` overrides. Chainable `setText`,
+  `setIcon(drawable)` / `setIconResource(id)` (tinted like the text unless
+  `setIconTintEnabled(false)` — use that for the app icon), `setGravity(gravity, xOffset,
+  yOffset)` (default bottom-centre, 64dp up, system-bar insets added automatically),
+  `setDuration`, `setTextColor`, then `show()`. `cancel()` fades it out; static
+  `cancelCurrent()`. Only one is shown at a time — `show()` replaces the previous toast.
+  It does not intercept touches. Exposes `glass` (a `LiquidGlassView`, tune lens params
+  there), `textView`, `imageView`.
 - `LiquidGlassDialogBuilder` — a `MaterialAlertDialogBuilder` (not a `LiquidGlassView`
   subclass) that swaps the dialog panel into a `LiquidGlassView` on the first pre-draw:
   `backdropSource` is wired to the activity content view, backgrounds are cleared, the

@@ -186,6 +186,8 @@
     <string name="sheet_dialog_open">Open glass dialog</string>
     <string name="sheet_dialog_title">Liquid Glass Dialog</string>
     <string name="sheet_dialog_body">A Material dialog whose whole panel sits inside a LiquidGlassView.</string>
+    <string name="sheet_toast_open">Show glass toast</string>
+    <string name="sheet_toast_text">Glass toast · drawn inside the activity window</string>
     <string name="simulate_api_label">Simulate API Level</string>
     <string name="api_cap_device">Device</string>
     <string name="simulate_api_desc">Clamps the pipeline tier to preview older devices: 36+ AGSL color filter/blend extras · 33–35 lens · 31–32 classic GPU · ≤30 CPU. The overlay shows real → effective API.</string>
@@ -231,7 +233,10 @@
 
     <!-- Group Scene (M3 grouped list items) -->
     <string name="scene_group">Group</string>
-    <string name="group_hint">Each row is its own glass view. Position picks which corners round.</string>
+    <string name="group_style_merged">Merged</string>
+    <string name="group_style_separated">Separated</string>
+    <string name="group_hint_merged">Merged: rows share flat edges, only the group outline refracts.</string>
+    <string name="group_hint_separated">Separated: every row is its own rounded card with a gap between.</string>
     <string name="group_wifi_title">Wi‑Fi</string>
     <string name="group_wifi_sub">Connected · Home 5G</string>
     <string name="group_bt_title">Bluetooth</string>
