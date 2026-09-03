@@ -30,8 +30,9 @@ backdrop 录制（带 margin 外扩）
       7. 触摸凸起：手指下方高斯泡状局部放大（press uniform 联动）
       8. 饱和度（提饱和端 vibrancy 曲线：低饱和多提/高饱和少提/高光保护）
          → 自适应染色（enableAdaptiveTint 时按局部亮度逐像素过渡）/Clear 压暗
-      9. 镜面高光：dot(N, -L) 主光边 + 0.45× 对侧回光 + 1px 贴边亮线
-     10. 内阴影：背光侧边缘内部渐暗（厚度感）
+      9. 镜面高光：dot(N, -L) 角度瓣（pow 2.5 铺开 + pow 8 收紧核）+ 1px 贴边
+         亮线，两者都随角度衰减到 0，无方向无关的常亮项
+     10. 内阴影：背光侧边缘内部渐暗（厚度感）+ 贴边压暗（与迎光侧亮线对称）
 ```
 
 关键点：
@@ -55,7 +56,7 @@ backdrop 录制（带 margin 外扩）
 | `bevelWidth` | 40px | 边缘斜面带宽度（玻璃"厚度"，2-200） |
 | `refractionHeight` | 200px | 边缘最大折射位移（0-300，采样有安全钳制） |
 | `dispersionStrength` | 0.10 | 色散强度（与色差/色散开关及其滑杆联动） |
-| `enableSensorHighlight` | false | 高光跟随重力传感器（光源固定在世界坐标） |
+| `enableSensorHighlight` | false | 高光跟随重力传感器（光源固定在世界坐标）；关闭时用固定的左上光源 |
 | `enableAdaptiveTint` | false | 背景亮度自适应染色（透镜管线逐像素；亮度计仍供 `glassAppearanceListener` 使用） |
 | `glassAppearanceListener` | null | `(isOverLight) -> Unit`，背景明暗翻转回调（联动前景文字色） |
 | `isOverLightBackground` | — | 当前明暗判定（只读） |

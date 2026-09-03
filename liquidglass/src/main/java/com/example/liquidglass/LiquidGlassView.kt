@@ -1381,8 +1381,8 @@ open class LiquidGlassView @JvmOverloads constructor(
             lx = (LightSourceController.lightDirX * 200f).toInt() / 200f
             ly = (LightSourceController.lightDirY * 200f).toInt() / 200f
         } else {
-            lx = 0.0f
-            ly = 1.0f
+            lx = LightSourceController.DEFAULT_X
+            ly = LightSourceController.DEFAULT_Y
         }
 
         // —— 模糊半径 × 材质缩放（量化到 0.5px） ——

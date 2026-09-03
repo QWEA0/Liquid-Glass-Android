@@ -226,25 +226,32 @@ internal class GlassLensRenderer {
                     col = mix(col, clamp(absorbed + scattered, float3(0.0), float3(1.0)), glassTint.a);
                 }
 
-                // 光照：同一法线场驱动。高光集中在贴边窄带（宽度与斜面弱相关，
-                // 上限 9px），角度瓣收紧（pow 5）——避免大斜面时出现大面积泛白光斑
+                // 光照：同一法线场驱动。整圈轮廓的明暗只由 dot(N, -L) 决定，
+                // 没有与方向无关的常亮项——背光侧不会残留一条固定亮线。
+                // 角度瓣用 pow 2.5 铺开成连续斜面渐变，另叠一个 pow 8 的收紧
+                // 核保留正对光源处的亮点，避免大斜面时出现大面积泛白光斑
                 float facing = dot(n, -lightDir);
                 float facingPos = max(facing, 0.0);
                 float facingNeg = max(-facing, 0.0);
 
+                // 贴边窄带（宽度与斜面弱相关，上限 9px）+ 最外层 1px 发丝带
                 float bandW = clamp(bevel * 0.3, 2.0, 9.0);
                 float rim = clamp(1.0 - (-d - 0.5) / bandW, 0.0, 1.0) * cov;
-                float lobe = 0.55 * pow(facingPos, 5.0) + 0.18 * pow(facingNeg, 5.0) + 0.05;
-                float hair = clamp(1.0 - abs(d + 1.0) / 1.5, 0.0, 1.0);
-                float spec = (rim * lobe + hair * (0.22 + 0.35 * facingPos))
+                float hair = clamp(1.0 - abs(d + 1.0) / 1.5, 0.0, 1.0) * cov;
+                float lobe = pow(facingPos, 2.5);
+                float spec = (rim * (0.34 * lobe + 0.22 * pow(facingPos, 8.0))
+                              + hair * 0.34 * lobe)
                              * specStrength * (1.0 - 0.35 * press);
                 col += float3(spec);
 
-                // 内阴影：背光侧边缘内部微暗（宽度独立于斜面，上限 28px）
+                // 内阴影：背光侧边缘内部微暗（宽度独立于斜面，上限 28px），
+                // 再叠一层贴边压暗与迎光侧的亮线对称——背光侧收成暗边，
+                // 整圈轮廓因此是"迎光渐亮 → 侧向消隐 → 背光渐暗"的连续过渡
                 float shadowW = clamp(bevel, 4.0, 28.0);
                 float shadowBand = pow(clamp(1.0 + d / shadowW, 0.0, 1.0), 1.5);
                 float ish = shadowBand * facingNeg * innerShadow;
-                col = col * (1.0 - 0.45 * ish);
+                float rimDark = (rim * 0.6 + hair * 0.4) * pow(facingNeg, 1.5) * innerShadow;
+                col = col * clamp(1.0 - 0.45 * ish - 0.22 * rimDark, 0.0, 1.0);
 
                 col = clamp(col, float3(0.0), float3(1.0));
                 return half4(half3(col * cov), half(cov));

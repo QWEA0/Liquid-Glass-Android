@@ -25,9 +25,12 @@ import kotlin.math.sqrt
 
 internal object LightSourceController : SensorEventListener {
 
-    /** 默认光源方向（无传感器/设备平放时）：正上方射入（对应竖握姿态） */
-    private const val DEFAULT_X = 0.0f
-    private const val DEFAULT_Y = 1.0f
+    /**
+     * 默认光源方向（无传感器/设备平放时）：左上方射入，对应 iOS Liquid Glass
+     * 的「左上高光、右下阴影」。向量是光线的行进方向（view 坐标系 y 向下）
+     */
+    internal const val DEFAULT_X = 0.45f
+    internal const val DEFAULT_Y = 0.89f
 
     /** 低通滤波系数（SENSOR_DELAY_GAME ≈ 50Hz） */
     private const val SMOOTHING = 0.14f
