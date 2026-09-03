@@ -72,7 +72,7 @@ afterEvaluate {
                 from(components["release"])
                 groupId = "com.github.QWEA0"
                 artifactId = "liquidglass"
-                version = "2.0.7"
+                version = "2.0.8"
             }
         }
     }

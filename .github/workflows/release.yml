@@ -92,7 +92,7 @@ jobs:
             ### Library
 
             ```kotlin
-            implementation("com.github.QWEA0.Liquid-Glass-Android:liquidglass:${{ github.ref_name }}")
+            implementation("com.github.QWEA0:liquidglass:${{ github.ref_name }}")
             ```
 
       # 手动触发时不发布，只把产物挂成 artifact 供下载核对
