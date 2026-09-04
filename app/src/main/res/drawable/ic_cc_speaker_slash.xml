@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制中心：静音（SF Symbol speaker.slash.fill 风格） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="23dp" android:height="25dp" android:viewportWidth="23" android:viewportHeight="25">
+    <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6" android:strokeLineJoin="round" android:pathData="M0.8,9.2 H5.6 L11.6,3.8 V21.2 L5.6,15.8 H0.8 Z" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2.2" android:strokeLineCap="round" android:pathData="M3.2,1.6 L21.8,23.4" />
+</vector>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制中心：飞行模式（SF Symbol airplane 风格，机头朝右） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="21dp" android:viewportWidth="24" android:viewportHeight="21">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M22,10.5 C22,9.5 21.2,8.7 20.2,8.7 L14.1,8.7 L9.9,1.7 C9.6,1.2 9.1,0.9 8.5,0.9 L7.3,0.9 C6.8,0.9 6.5,1.4 6.7,1.9 L9,8.7 L5.5,8.7 L3.8,6.7 C3.6,6.4 3.3,6.3 3,6.3 L2.4,6.3 C2.1,6.3 1.9,6.6 2,6.9 L3,10.5 L2,14.1 C1.9,14.4 2.1,14.7 2.4,14.7 L3,14.7 C3.3,14.7 3.6,14.6 3.8,14.3 L5.5,12.3 L9,12.3 L6.7,19.1 C6.5,19.6 6.8,20.1 7.3,20.1 L8.5,20.1 C9.1,20.1 9.6,19.8 9.9,19.3 L14.1,12.3 L20.2,12.3 C21.2,12.3 22,11.5 22,10.5 Z" />
+</vector>

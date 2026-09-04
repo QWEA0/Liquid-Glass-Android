@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制中心：屏幕镜像（SF Symbol rectangle.on.rectangle 风格，后面的矩形被前面的遮断） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="34dp" android:height="30dp" android:viewportWidth="34" android:viewportHeight="30">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2.4" android:strokeAlpha="0.7" android:strokeLineCap="round" android:pathData="M10.2,19.6 H4.4 A3.2,3.2 0 0 1 1.2,16.4 V4.4 A3.2,3.2 0 0 1 4.4,1.2 H18.8 A3.2,3.2 0 0 1 22,4.4 V8.6" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2.4" android:pathData="M15.2,10.4 H29.6 A3.2,3.2 0 0 1 32.8,13.6 V25.6 A3.2,3.2 0 0 1 29.6,28.8 H15.2 A3.2,3.2 0 0 1 12,25.6 V13.6 A3.2,3.2 0 0 1 15.2,10.4 Z" />
+</vector>

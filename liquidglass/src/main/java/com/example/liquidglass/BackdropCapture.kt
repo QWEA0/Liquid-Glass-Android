@@ -19,6 +19,12 @@
  * 已知取舍（只影响 source 是跨层级祖先的情况）：
  * - 路径上的容器带缩放/旋转/透明度时，这些变换不会作用到它的内容上；
  * - 玻璃所在的分支单独补画在最后，同层里排在它之后的兄弟视图会被它盖住。
+ *
+ * **嵌套采样只允许一层。** 采样时若录制区盖到了别的玻璃（邻居离得比采样外扩还近），
+ * 硬件画布会顺手重录那块玻璃的显示列表，它的 onDraw 又去采样父容器、又画到自己的
+ * 邻居……层数随互相靠近的玻璃数指数增长（15 块动态玻璃一帧要录上万次）。所以一旦
+ * 发现自己已经处在别的玻璃的采样里，就把子树中其余的玻璃一并藏掉：这一层录出来的
+ * 邻居玻璃，其采样区里只剩背景，没有别的玻璃。玻璃本来就不该折射玻璃，视觉上无损。
  */
 package com.example.liquidglass
 
@@ -28,9 +34,15 @@ import android.view.ViewGroup
 
 internal class BackdropCapture {
 
+    private companion object {
+        /** 进行中的采样层数（只在主线程改）。> 0 说明当前绘制发生在某块玻璃的采样里 */
+        var depth = 0
+    }
+
     // 复用，避免每帧分配
     private val hostLocation = IntArray(2)
     private val childLocation = IntArray(2)
+    private val nestedHidden = ArrayList<View>()
 
     /**
      * 把 [source] 的内容画进 [canvas]，跳过 [glass]
@@ -72,11 +84,36 @@ internal class BackdropCapture {
         canvas.translate(-host.scrollX.toFloat(), -host.scrollY.toFloat())
         // setTransitionVisibility 只改可见性标志、不触发 invalidate
         hidden.setTransitionVisibility(View.INVISIBLE)
+        val nested = depth > 0
+        if (nested) hideOtherGlass(host, hidden)
+        depth++
         try {
             host.draw(canvas)
         } finally {
+            depth--
+            if (nested) {
+                for (v in nestedHidden) v.setTransitionVisibility(View.VISIBLE)
+                nestedHidden.clear()
+            }
             hidden.setTransitionVisibility(View.VISIBLE)
             canvas.restoreToCount(save)
+        }
+    }
+
+    /** 把 [root] 子树里除 [except] 之外的玻璃都临时藏起来（藏掉的整棵子树都不再进入） */
+    private fun hideOtherGlass(root: View, except: View) {
+        if (root !is ViewGroup) return
+        for (i in 0 until root.childCount) {
+            val child = root.getChildAt(i)
+            if (child === except) continue
+            if (child is LiquidGlassView) {
+                if (child.visibility == View.VISIBLE) {
+                    child.setTransitionVisibility(View.INVISIBLE)
+                    nestedHidden.add(child)
+                }
+            } else {
+                hideOtherGlass(child, except)
+            }
         }
     }
 

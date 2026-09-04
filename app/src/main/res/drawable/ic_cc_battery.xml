@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制中心：状态行的充电电池（灰色外框 + 绿色电量 + 白色闪电，自带颜色，不要 tint） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="31dp" android:height="16dp" android:viewportWidth="31" android:viewportHeight="16">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.2" android:strokeAlpha="0.45" android:pathData="M4.8,0.6 H24.2 A4.2,4.2 0 0 1 28.4,4.8 V11.2 A4.2,4.2 0 0 1 24.2,15.4 H4.8 A4.2,4.2 0 0 1 0.6,11.2 V4.8 A4.2,4.2 0 0 1 4.8,0.6 Z" />
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.45" android:pathData="M29.6,5.5 H30.2 A0.8,0.8 0 0 1 31,6.3 V9.7 A0.8,0.8 0 0 1 30.2,10.5 H29.6 Z" />
+    <path android:fillColor="#FF4CC85A" android:pathData="M5.9,2.65 H23.1 A3.2,3.2 0 0 1 26.3,5.85 V10.15 A3.2,3.2 0 0 1 23.1,13.35 H5.9 A3.2,3.2 0 0 1 2.7,10.15 V5.85 A3.2,3.2 0 0 1 5.9,2.65 Z" />
+    <path android:fillColor="#FFFFFFFF" android:strokeColor="#FF4CC85A" android:strokeWidth="0.8" android:strokeLineJoin="round" android:pathData="M16.5,0.3 L9.9,8.9 H14.2 L12.6,15.7 L19.8,7.1 H15.2 Z" />
+</vector>

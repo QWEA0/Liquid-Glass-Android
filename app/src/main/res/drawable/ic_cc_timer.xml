@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制中心：计时器（SF Symbol timer 风格：右上开口的环 + 指向左上的水滴指针） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="34dp" android:height="34dp" android:viewportWidth="34" android:viewportHeight="34">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2.6" android:strokeAlpha="0.8" android:strokeLineCap="round" android:pathData="M17,1.6 A15.4,15.4 0 1 0 31.28,11.23" />
+    <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.2" android:strokeLineJoin="round" android:pathData="M9.4,9.4 L18.9,15.1 A2.6,2.6 0 1 1 15.1,18.9 Z" />
+</vector>

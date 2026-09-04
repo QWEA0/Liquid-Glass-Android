@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制中心：屏幕录制（SF Symbol record.circle 风格：半透明外环 + 实心圆） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="33dp" android:height="33dp" android:viewportWidth="33" android:viewportHeight="33">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2.6" android:strokeAlpha="0.55" android:pathData="M16.5,1.3 A15.2,15.2 0 1 1 16.5,31.7 A15.2,15.2 0 1 1 16.5,1.3 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M16.5,9 A7.5,7.5 0 1 1 16.5,24 A7.5,7.5 0 1 1 16.5,9 Z" />
+</vector>

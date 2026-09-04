@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制中心：蜂窝信号（SF Symbol cellularbars 风格，只亮第一格） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="17dp" android:height="12dp" android:viewportWidth="17" android:viewportHeight="12">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M0.9,8 H2.3 A0.9,0.9 0 0 1 3.2,8.9 V11.1 A0.9,0.9 0 0 1 2.3,12 H0.9 A0.9,0.9 0 0 1 0,11.1 V8.9 A0.9,0.9 0 0 1 0.9,8 Z" />
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.45" android:pathData="M5.5,5.5 H6.8999999999999995 A0.9,0.9 0 0 1 7.8,6.4 V11.1 A0.9,0.9 0 0 1 6.8999999999999995,12 H5.5 A0.9,0.9 0 0 1 4.6,11.1 V6.4 A0.9,0.9 0 0 1 5.5,5.5 Z" />
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.45" android:pathData="M10.1,3 H11.5 A0.9,0.9 0 0 1 12.399999999999999,3.9 V11.1 A0.9,0.9 0 0 1 11.5,12 H10.1 A0.9,0.9 0 0 1 9.2,11.1 V3.9 A0.9,0.9 0 0 1 10.1,3 Z" />
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.45" android:pathData="M14.700000000000001,0 H16.1 A0.9,0.9 0 0 1 17.0,0.9 V11.1 A0.9,0.9 0 0 1 16.1,12 H14.700000000000001 A0.9,0.9 0 0 1 13.8,11.1 V0.9 A0.9,0.9 0 0 1 14.700000000000001,0 Z" />
+</vector>

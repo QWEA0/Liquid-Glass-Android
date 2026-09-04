@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制中心：AirPlay 音频（SF Symbol airplayaudio 风格：三道同心弧 + 底部三角） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="18dp" android:height="18dp" android:viewportWidth="18" android:viewportHeight="18">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.3" android:strokeLineCap="round" android:pathData="M2.72,13.47 A8.2,8.2 0 1 1 15.28,13.47 M4.86,11.67 A5.4,5.4 0 1 1 13.14,11.67 M7.01,9.87 A2.6,2.6 0 1 1 10.99,9.87" />
+    <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.0" android:strokeLineJoin="round" android:pathData="M9,9.6 L13.8,16.8 H4.2 Z" />
+</vector>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制中心：下一曲（SF Symbol forward.fill 风格） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="14dp" android:viewportWidth="24" android:viewportHeight="14">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M12.5,1.5 C12.5,0.6 13.4,0.2 14.1,0.7 L23,6.1 C23.7,6.5 23.7,7.1 23,7.5 L14.1,12.9 C13.4,13.4 12.5,13 12.5,12.1 Z M0.5,1.5 C0.5,0.6 1.4,0.2 2.1,0.7 L11,6.1 C11.7,6.5 11.7,7.1 11,7.5 L2.1,12.9 C1.4,13.4 0.5,13 0.5,12.1 Z" />
+</vector>

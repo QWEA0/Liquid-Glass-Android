@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制中心：VPN（SF Symbol network 风格：经纬线地球 + 底座） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="12dp" android:height="15dp" android:viewportWidth="12" android:viewportHeight="15">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.2" android:pathData="M6,0.75 A4.75,4.75 0 1 1 6,10.25 A4.75,4.75 0 1 1 6,0.75 Z" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.1" android:pathData="M6,0.75 A2.2,4.75 0 1 1 6,10.25 A2.2,4.75 0 1 1 6,0.75 Z" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.1" android:pathData="M1.53,3.9 H10.47 M1.53,7.1 H10.47" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.2" android:strokeLineCap="round" android:pathData="M6,10.25 V12.9 M1.6,12.9 H10.4 M1.6,12.9 V14.4 M6,12.9 V14.4 M10.4,12.9 V14.4" />
+</vector>

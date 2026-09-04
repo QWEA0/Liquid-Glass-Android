@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制中心：蓝牙符文 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="8dp" android:height="13dp" android:viewportWidth="8" android:viewportHeight="13">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M0.75,3.3 L7.25,9.7 L4,12.25 V0.75 L7.25,3.3 L0.75,9.7" />
+</vector>

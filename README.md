@@ -108,11 +108,20 @@ If you're Compose-first, use Kyant0's — don't wrap this one in an `AndroidView
 
 </div>
 
-Run the sample app for the full playground (8 scenes + a live parameter drawer), or launch the
+Run the sample app for the full playground (9 scenes + a live parameter drawer), or launch the
 hero scene used for the screenshots at the top:
 
 ```bash
 adb shell am start -n com.example.liquidglass/com.example.liquidglass.HeroShowcaseActivity
+```
+
+The **Control Center** scene is a pixel-measured replica of the iOS 26 Control Center (main page,
+and the expanded connectivity page — tap the connectivity tile) over the same wallpaper, so you can
+put it next to a real iPhone and compare the glass itself. It hides the demo chrome and system bars;
+tap the power icon in the top-right corner to bring them back.
+
+```bash
+adb shell am start -n com.example.liquidglass/com.example.liquidglass.ProfessionalDemoActivity --es scene control_center
 ```
 
 ### 📦 Installation (JitPack)
@@ -562,10 +571,17 @@ Inspired by the glassmorphism design trend and liquid-glass-react library.
 
 </div>
 
-跑 sample app 可以看到完整调参场（8 个场景 + 实时参数抽屉），或者直接启动首屏用的 hero 场景：
+跑 sample app 可以看到完整调参场（9 个场景 + 实时参数抽屉），或者直接启动首屏用的 hero 场景：
 
 ```bash
 adb shell am start -n com.example.liquidglass/com.example.liquidglass.HeroShowcaseActivity
+```
+
+**控制中心**场景是按 iOS 26 控制中心截图逐像素量出来的复刻（主页，以及点网络模块展开的二级页），
+背景用同一张壁纸，方便和真机并排只比玻璃本身。这个场景会藏起 demo 控件和系统栏，点右上角的电源图标切回。
+
+```bash
+adb shell am start -n com.example.liquidglass/com.example.liquidglass.ProfessionalDemoActivity --es scene control_center
 ```
 
 ### 📦 安装（JitPack）

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制中心：右侧页面指示的天线（SF Symbol antenna.radiowaves.left.and.right 风格） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="18dp" android:height="17dp" android:viewportWidth="18" android:viewportHeight="17">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6" android:strokeLineCap="round" android:pathData="M5.02,9.8 A4.6,4.6 0 0 1 5.02,5.2 M1.55,11.8 A8.6,8.6 0 0 1 1.55,3.2 M12.98,9.8 A4.6,4.6 0 0 0 12.98,5.2 M16.45,11.8 A8.6,8.6 0 0 0 16.45,3.2 M9,9.2 V16.2" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M9,5.6 A1.9,1.9 0 1 1 9,9.4 A1.9,1.9 0 1 1 9,5.6 Z" />
+</vector>

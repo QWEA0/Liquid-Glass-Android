@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制中心：亮度（SF Symbol sun.max.fill 风格：圆心 + 八根圆头短线） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="27dp" android:height="27dp" android:viewportWidth="27" android:viewportHeight="27">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M13.5,8.3 A5.2,5.2 0 1 1 13.5,18.7 A5.2,5.2 0 1 1 13.5,8.3 Z" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2.6" android:strokeLineCap="round" android:pathData="M21.7,13.5 H25.2 M19.3,19.3 L21.77,21.77 M13.5,21.7 V25.2 M7.7,19.3 L5.23,21.77 M5.3,13.5 H1.8 M7.7,7.7 L5.23,5.23 M13.5,5.3 V1.8 M19.3,7.7 L21.77,5.23" />
+</vector>
