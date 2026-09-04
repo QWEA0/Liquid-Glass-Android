@@ -511,13 +511,13 @@ open class LiquidGlassView @JvmOverloads constructor(
         }
 
     /**
-     * 折射方向（仅透镜管线，默认向外）
+     * 折射方向（仅透镜管线，默认向内，与 iOS 一致）
      *
-     * true：像真实的凸透镜——边缘把形状**外**的背景弯进来，靠近的内容还没进到玻璃下面
-     * 就先出现在边缘，进来之后沿边缘延展。false：旧行为，向内采样，边缘是内侧背景的
-     * 压缩镜像。向外采样时录制区要外扩到折射距离，并多一层离屏合成，小控件开销可忽略。
+     * false：向内采样，边缘是内侧背景的压缩镜像。true：可选的凸透镜模式——边缘把形状**外**
+     * 的背景弯进来，靠近的内容还没进到玻璃下面就先出现在边缘，进来之后沿边缘延展；
+     * 此时录制区要外扩到折射距离，并多一层离屏合成。
      */
-    var refractionOutward = true
+    var refractionOutward = false
         set(value) {
             if (field != value) {
                 field = value

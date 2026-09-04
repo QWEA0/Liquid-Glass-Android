@@ -107,13 +107,13 @@ glass.enableDynamicBackground = true   // REQUIRED if the backdrop moves or the 
   `enableAdaptiveTint`, `adaptiveLensScale`, `refractionOutward`, `setSecondaryShape`. They
   degrade silently below API 33 — the classic blur/aberration pipeline runs instead. No
   crash, no exception.
-- **Refraction samples outward by default** (`refractionOutward = true`, API 33+): the rim
-  bends in content that is still outside the shape, so text or icons approaching the glass
-  show up in the edge before they pass under it, and content under the glass stretches
-  along the edge — the convex-lens look. The backdrop is recorded with a margin as wide as
-  the refraction reach and rendered through an offscreen compositing layer; set
-  `refractionOutward = false` for the old inward sampling (a compressed mirror of the
-  interior at the rim, no extra layer).
+- **Refraction samples inward by default** (`refractionOutward = false`, matching iOS):
+  the rim shows a compressed mirror of the content under the glass. `refractionOutward =
+  true` (API 33+) is an optional convex-lens mode: the rim bends in content that is still
+  outside the shape, so text or icons approaching the glass show up in the edge before
+  they pass under it, and content under the glass stretches along the edge. That mode
+  records the backdrop with a margin as wide as the refraction reach and renders through
+  an offscreen compositing layer.
 - **Small controls are handled automatically.** `adaptiveLensScale` (default `true`, API 33+)
   caps `bevelWidth`, `refractionHeight` and the rim-highlight / inner-shadow band widths by
   the shape's short side (bevel ≤ 0.3×, highlight band ≤ 0.05×, shadow band ≤ 0.12×;

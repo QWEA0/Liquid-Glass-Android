@@ -51,7 +51,7 @@
         <attr name="adaptiveTint" format="boolean" />
         <!-- 透镜几何随控件尺寸自适应：斜面 / 折射 / 高光带 / 内阴影带按形状短边钳，默认 true -->
         <attr name="adaptiveLensScale" format="boolean" />
-        <!-- 折射向外采样（凸透镜：形状外的背景弯进边缘，默认 true）；false = 向内压缩镜像（旧行为） -->
+        <!-- 折射向外采样（可选的凸透镜模式：形状外的背景弯进边缘）；默认 false = 向内压缩镜像，与 iOS 一致 -->
         <attr name="refractionOutward" format="boolean" />
 
         <!-- 玻璃本体染色：颜色自带的 alpha 即染色强度；

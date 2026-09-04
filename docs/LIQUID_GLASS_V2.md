@@ -24,9 +24,10 @@ backdrop 录制（带 margin 外扩）
       2. 覆盖率：SDF ±0.75px 抗锯齿，形状外 alpha=0（不再需要 clipPath）
       3. 法线：SDF 数值梯度 → 屏幕空间外法线
       4. 厚度剖面：bevelWidth 宽的斜面带，内部平坦
-      5. 折射：沿法线向外采样 refractionHeight × slope²（凸透镜）→ 形状外的背景
-         被弯进边缘，还没进到玻璃下面的内容先出现在边缘，进来之后沿边缘延展；
-         refractionOutward = false 时向内采样（旧行为：边缘是内侧背景的压缩镜像）
+      5. 折射：沿法线向内采样 refractionHeight × slope² → 边缘呈现内侧背景的
+         压缩镜像（默认，与 iOS 一致）；refractionOutward = true 时向外采样
+         （可选的凸透镜模式：形状外的背景被弯进边缘，还没进到玻璃下面的内容
+         先出现在边缘，进来之后沿边缘延展）
       6. 色散：R/G/B 三通道折射量 ×(1∓dispersion·slope) → 边缘光谱边纹
       7. 触摸凸起：手指下方高斯泡状局部放大（press uniform 联动）
       8. 饱和度（提饱和端 vibrancy 曲线：低饱和多提/高饱和少提/高光保护）
@@ -38,7 +39,7 @@ backdrop 录制（带 margin 外扩）
 
 关键点：
 
-- **向外折射要绕过子输入的裁剪限制**（真机踩坑）：`RenderEffect.createRuntimeShaderEffect`
+- **向外折射（可选模式）要绕过子输入的裁剪限制**（真机踩坑）：`RenderEffect.createRuntimeShaderEffect`
   没有暴露 Skia 的 `childSampleRadius`，子输入只保证"输出裁剪区"内可采样；
   带效果的节点直接画到视图画布上时输出区被裁到视图矩形，margin 里录下的内容
   对着色器不可见，向外采样读到透明黑 → 轮廓黑边。解法：把带效果的节点画进一个
@@ -46,7 +47,7 @@ backdrop 录制（带 margin 外扩）
   就是录制区，着色器采得到 margin，外层节点再画到视图画布上才被裁到视图矩形。
   录制 `margin` 随之外扩到折射距离；采样坐标另按"录制区 ∩ 背景来源矩形"钳制
   （来源之外没有内容），该矩形随滚动变化时量化到 4px 再重建 effect。
-  向内采样（`refractionOutward = false`）不需要这一层，仍是旧的单节点路径。
+  默认的向内采样（`refractionOutward = false`）不需要这一层，仍是单节点路径。
 - **高光和折射共享同一法线场**：形状怎么变（圆角、融合、副形状移动），
   高光和折射自动跟着变——这是旧"描边渐变"方案做不到的。
 - **uniform 全部量化**（光源 0.005、模糊 0.5px、按压 0.01），静止时不重建
@@ -60,7 +61,7 @@ backdrop 录制（带 margin 外扩）
 | `material` | REGULAR | `GlassMaterial.REGULAR`（自适应重可读性）/ `CLEAR`（高透 + 压暗层） |
 | `bevelWidth` | 40px | 边缘斜面带宽度（玻璃"厚度"，2-200） |
 | `refractionHeight` | 200px | 边缘最大折射位移（0-300，采样有安全钳制） |
-| `refractionOutward` | true | 折射向外采样（凸透镜：形状外的背景弯进边缘）；false = 向内压缩镜像（旧行为） |
+| `refractionOutward` | false | 可选的凸透镜模式：true 向外采样（形状外的背景弯进边缘）；默认向内压缩镜像，与 iOS 一致 |
 | `adaptiveLensScale` | true | 斜面 / 折射 / 高光带 / 内阴影带按形状短边钳，小控件不再整块都是边缘带 |
 | `dispersionStrength` | 0.10 | 色散强度（与色差/色散开关及其滑杆联动） |
 | `enableSensorHighlight` | false | 高光跟随重力传感器（光源固定在世界坐标）；关闭时用固定的左上光源 |

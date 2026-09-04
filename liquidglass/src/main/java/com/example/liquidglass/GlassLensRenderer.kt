@@ -65,7 +65,7 @@ internal class GlassLensRenderer {
             uniform float  blendK;
             uniform float  bevel;
             uniform float  refractPx;
-            uniform float  refractDir;   // +1 向外采样（凸透镜：形状外的背景弯进边缘）/ -1 向内（旧行为：内侧压缩镜像）
+            uniform float  refractDir;   // -1 向内采样（默认，与 iOS 一致：内侧压缩镜像）/ +1 向外（可选的凸透镜模式）
             uniform float2 sampleLo;     // 采样安全区（录制内容坐标）：区外没有内容，读到的是透明黑
             uniform float2 sampleHi;
             uniform float  dispersion;
@@ -146,9 +146,9 @@ internal class GlassLensRenderer {
                 float edge = 1.0 - t;
                 float slope = edge * edge;
 
-                // 折射：refractDir = +1 沿法线向外采样——凸透镜把形状外的背景弯进边缘，
-                // 靠近的内容还没进到玻璃下面就先出现在边缘，进来之后沿边缘延展；
-                // -1 为旧行为，向内采样，边缘是内侧背景的压缩镜像。
+                // 折射：refractDir = -1 沿法线向内采样（默认，与 iOS 一致）——边缘是内侧背景的
+                // 压缩镜像；+1 为可选的凸透镜模式，向外采样，形状外的背景被弯进边缘，
+                // 靠近的内容还没进到玻璃下面就先出现在边缘，进来之后沿边缘延展。
                 // RuntimeShader 子输入只保证"输出裁剪区"内可采样（Android 未暴露 Skia 的
                 // childSampleRadius），向外采样必须让输出区覆盖整个外扩录制区——见 draw()
                 // 里的外层合成节点；采样再由 sampleLo/Hi 钳在有内容的范围内
