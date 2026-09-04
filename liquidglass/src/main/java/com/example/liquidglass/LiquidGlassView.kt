@@ -510,6 +510,21 @@ open class LiquidGlassView @JvmOverloads constructor(
             }
         }
 
+    /**
+     * 折射方向（仅透镜管线，默认向外）
+     *
+     * true：像真实的凸透镜——边缘把形状**外**的背景弯进来，靠近的内容还没进到玻璃下面
+     * 就先出现在边缘，进来之后沿边缘延展。false：旧行为，向内采样，边缘是内侧背景的
+     * 压缩镜像。向外采样时录制区要外扩到折射距离，并多一层离屏合成，小控件开销可忽略。
+     */
+    var refractionOutward = true
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
     /** 色散强度（0-1）：三通道折射差异，边缘光谱边纹宽度（仅透镜管线） */
     var dispersionStrength = 0.10f
         set(value) {
@@ -981,6 +996,7 @@ open class LiquidGlassView @JvmOverloads constructor(
             enableSensorHighlight = ta.getBoolean(R.styleable.LiquidGlassView_sensorHighlight, enableSensorHighlight)
             enableAdaptiveTint = ta.getBoolean(R.styleable.LiquidGlassView_adaptiveTint, enableAdaptiveTint)
             adaptiveLensScale = ta.getBoolean(R.styleable.LiquidGlassView_adaptiveLensScale, adaptiveLensScale)
+            refractionOutward = ta.getBoolean(R.styleable.LiquidGlassView_refractionOutward, refractionOutward)
             glassTint = ta.getColor(R.styleable.LiquidGlassView_glassTint, glassTint)
             // 单独给了强度就覆盖颜色自带的 alpha（app:glassTint="#0A84FF" 这种写法
             // 解析出来 alpha 是 255，不给个强度旋钮就只能是最浓的一档）
@@ -1451,7 +1467,9 @@ open class LiquidGlassView @JvmOverloads constructor(
         val tx = (touchX * 2f).toInt() / 2f
         val ty = (touchY * 2f).toInt() / 2f
 
-        val margin = computeLensMargin(radius)
+        // 向外折射时录制区要盖住折射的最大采样距离（按压时多出的 60% 不算，越界由采样安全区兜底）
+        val rimSoft = (edgeSoftness * 2f).toInt() / 2f
+        val margin = computeLensMargin(radius, if (refractionOutward) refractEff + rimSoft + 8f else 0f)
 
         // —— 染色：Regular + 自适应时改走着色器内逐像素染色；tint 固定传 0，
         // 避免亮度采样 tick 更新全局染色触发无意义的 effect 重建 ——
@@ -1462,12 +1480,13 @@ open class LiquidGlassView @JvmOverloads constructor(
             shape1CX = s1cx, shape1CY = s1cy, shape1HW = s1hw, shape1HH = s1hh,
             radius1TL = r1TL, radius1TR = r1TR, radius1BR = r1BR, radius1BL = r1BL,
             lens1CX = l1cx, lens1CY = l1cy, lens1HW = l1hw, lens1HH = l1hh,
-            rimSoft = (edgeSoftness * 2f).toInt() / 2f,
+            rimSoft = rimSoft,
             shape2CX = p2?.centerX() ?: 0f, shape2CY = p2?.centerY() ?: 0f,
             shape2HW = s2hw, shape2HH = s2hh, radius2 = r2,
             blendK = if (p2 != null) shapeBlendSmoothing else 0f,
             bevel = bevelEff,
             refract = refractEff,
+            outward = refractionOutward,
             rimBandMax = rimBandMax,
             shadowMax = shadowMax,
             dispersion = disp,
@@ -1510,11 +1529,11 @@ open class LiquidGlassView @JvmOverloads constructor(
     /**
      * 背景录制外扩边距：供模糊 pass 在视图边缘取到真实内容（约 3σ 拉入范围）
      *
-     * 注意：折射采样是向内的（RuntimeShader 子输入越界会得到透明黑），
-     * margin 只服务于模糊质量。16px 对齐减少 effect 重建。
+     * 模糊在边缘处要采到真实内容；向外折射时还要盖住折射的最大采样距离
+     * [refractReach]（向内折射传 0）。16px 对齐减少 effect 重建。
      */
-    private fun computeLensMargin(blurRadius: Float): Int {
-        val need = max(blurRadius * 3f, 32f)
+    private fun computeLensMargin(blurRadius: Float, refractReach: Float): Int {
+        val need = max(max(blurRadius * 3f, 32f), refractReach)
         return (((need.toInt() + 15) / 16) * 16).coerceAtLeast(32)
     }
 

@@ -202,6 +202,8 @@
     <string name="material_clear">Clear</string>
     <string name="switch_sensor_highlight">Sensor-Driven Highlight</string>
     <string name="switch_adaptive_tint">Adaptive Luminance Tint</string>
+    <string name="switch_refraction_outward">Outward Refraction (convex lens)</string>
+    <string name="switch_adaptive_lens_scale">Adaptive Lens Scale (small controls)</string>
     <string name="lens_bevel">Bevel Width: %.0f px</string>
     <string name="lens_refraction">Refraction: %.0f px</string>
     <string name="lens_dispersion">Dispersion: %.2f</string>

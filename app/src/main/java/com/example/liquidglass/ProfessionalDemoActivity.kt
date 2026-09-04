@@ -1886,6 +1886,8 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         target.dispersionStrength = src.dispersionStrength
         target.enableSensorHighlight = src.enableSensorHighlight
         target.enableAdaptiveTint = src.enableAdaptiveTint
+        target.refractionOutward = src.refractionOutward
+        target.adaptiveLensScale = src.adaptiveLensScale
         target.glassTint = src.glassTint
         target.accessibilityMode = src.accessibilityMode
         target.enablePressEffect = src.enablePressEffect
@@ -2162,6 +2164,12 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         }
         addSwitchRow(group, getString(R.string.switch_adaptive_tint), glassView.enableAdaptiveTint) { checked ->
             applyGlass { it.enableAdaptiveTint = checked }
+        }
+        addSwitchRow(group, getString(R.string.switch_refraction_outward), glassView.refractionOutward) { checked ->
+            applyGlass { it.refractionOutward = checked }
+        }
+        addSwitchRow(group, getString(R.string.switch_adaptive_lens_scale), glassView.adaptiveLensScale) { checked ->
+            applyGlass { it.adaptiveLensScale = checked }
         }
 
         // 斜面宽度 2-120 px

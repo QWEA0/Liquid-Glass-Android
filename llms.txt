@@ -104,8 +104,16 @@ glass.enableDynamicBackground = true   // REQUIRED if the backdrop moves or the 
   testing or tuning, use a detailed backdrop, not a flat colour or a soft gradient.
 - **Liquid Glass 2.0 features require API 33+** (AGSL runtime shaders): `material`,
   `bevelWidth`, `refractionHeight`, `dispersionStrength`, `enableSensorHighlight`,
-  `enableAdaptiveTint`, `adaptiveLensScale`, `setSecondaryShape`. They degrade silently
-  below API 33 — the classic blur/aberration pipeline runs instead. No crash, no exception.
+  `enableAdaptiveTint`, `adaptiveLensScale`, `refractionOutward`, `setSecondaryShape`. They
+  degrade silently below API 33 — the classic blur/aberration pipeline runs instead. No
+  crash, no exception.
+- **Refraction samples outward by default** (`refractionOutward = true`, API 33+): the rim
+  bends in content that is still outside the shape, so text or icons approaching the glass
+  show up in the edge before they pass under it, and content under the glass stretches
+  along the edge — the convex-lens look. The backdrop is recorded with a margin as wide as
+  the refraction reach and rendered through an offscreen compositing layer; set
+  `refractionOutward = false` for the old inward sampling (a compressed mirror of the
+  interior at the rim, no extra layer).
 - **Small controls are handled automatically.** `adaptiveLensScale` (default `true`, API 33+)
   caps `bevelWidth`, `refractionHeight` and the rim-highlight / inner-shadow band widths by
   the shape's short side (bevel ≤ 0.3×, highlight band ≤ 0.05×, shadow band ≤ 0.12×;
