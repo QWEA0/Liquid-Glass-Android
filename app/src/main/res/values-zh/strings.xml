@@ -86,6 +86,8 @@
     <!-- Background & Language Section -->
     <string name="section_background_language">背景与语言</string>
     <string name="button_change_background">更换背景图片</string>
+    <string name="button_open_github">打开 GitHub 仓库</string>
+    <string name="github_star_button">★ GitHub 点个 Star</string>
     <string name="button_language_chinese">切换到中文</string>
     <string name="button_language_english">Switch to English</string>
     <string name="current_language">当前语言：中文</string>

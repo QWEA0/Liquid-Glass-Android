@@ -84,6 +84,8 @@ jobs:
           files: ${{ env.APK_PATH }}
           generate_release_notes: true
           body: |
+            :star: **Like the demo? [Star the repo](https://github.com/QWEA0/Liquid-Glass-Android)** so more Android developers can find it. Integration guide and full docs: [README](https://github.com/QWEA0/Liquid-Glass-Android#readme).
+
             ### Demo APK
 
             Download the APK below to preview the effects on a device — no build required.

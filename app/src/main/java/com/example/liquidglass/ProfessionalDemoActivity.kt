@@ -13,6 +13,7 @@ package com.example.liquidglass
 import android.Manifest
 import android.animation.ValueAnimator
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -106,6 +107,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     private lateinit var glassView: LiquidGlassView
     private val extraGlassViews = mutableListOf<LiquidGlassView>()
     private lateinit var fabSettings: FloatingActionButton
+    private lateinit var githubButton: LiquidGlassButton
     private lateinit var tvPerformanceOverlay: TextView
     private lateinit var tvDebugInfo: TextView
     private lateinit var sceneBarScroll: HorizontalScrollView
@@ -157,6 +159,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         private const val KEY_LANGUAGE = "language"
         private const val LANG_ENGLISH = "en"
         private const val LANG_CHINESE = "zh"
+        private const val REPO_URL = "https://github.com/QWEA0/Liquid-Glass-Android"
 
         private const val COLOR_BG = 0xFFF2F2F7.toInt()       // 面板底色
         private const val COLOR_SCROLL_GUTTER = 0xFF0B1020.toInt()  // 滚动场景上下留白底色
@@ -268,6 +271,30 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         }
         mainContent.addView(tvPerformanceOverlay)
 
+        // 左上角的仓库入口：下载 APK 试效果的人大多没打开过仓库页，这里给一条回去的路。
+        // 用库自己的玻璃按钮，顺带多一个真实场景里的小部件
+        githubButton = LiquidGlassButton(this).apply {
+            enableDynamicBackground = true
+            enableAdaptiveTint = true
+            text = getString(R.string.github_star_button)
+            setTextSize(13f)
+            textView.setPadding(dp(16), dp(9), dp(16), dp(9))
+            // 小胶囊：库默认的斜面 / 折射是给大面板定的，照搬整块都是边缘带
+            bevelWidth = dpF(14)
+            refractionHeight = dpF(22)
+            edgeSoftness = dpF(3)
+            setOnClickListener { openRepo() }
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                // 顶部间距在下面按真实状态栏 inset 设置
+                setMargins(dp(12), dp(8), 0, 0)
+            }
+        }
+        mainContent.addView(githubButton)
+
         // 场景切换条
         val sceneBar = createSceneBar()
         mainContent.addView(sceneBar)
@@ -299,12 +326,17 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 topMargin = bars.top + dp(8)
                 rightMargin = bars.right + dp(8)
             }
+            (githubButton.layoutParams as FrameLayout.LayoutParams).apply {
+                topMargin = bars.top + dp(8)
+                leftMargin = bars.left + dp(12)
+            }
             (sceneBar.layoutParams as FrameLayout.LayoutParams).bottomMargin = bars.bottom + dp(16)
             (fabSettings.layoutParams as FrameLayout.LayoutParams).apply {
                 bottomMargin = bars.bottom + dp(84)
                 rightMargin = bars.right + dp(20)
             }
             tvPerformanceOverlay.requestLayout()
+            githubButton.requestLayout()
             sceneBar.requestLayout()
             fabSettings.requestLayout()
             insets
@@ -1021,6 +1053,15 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         ).apply { gravity = Gravity.CENTER })
 
         return root
+    }
+
+    /** 打开仓库页：demo 的 APK 多是从 release 页直接下的，很多人没看过 README */
+    private fun openRepo() {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(REPO_URL)))
+        } catch (e: ActivityNotFoundException) {
+            showGlassToast(REPO_URL)
+        }
     }
 
     /**
@@ -2094,6 +2135,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         addButton(miscCard, getString(R.string.button_change_background)) {
             checkPermissionAndOpenPicker()
         }
+        addButton(miscCard, getString(R.string.button_open_github)) { openRepo() }
         addButton(miscCard, getLanguageSwitchButtonText()) {
             val prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
             val currentLang = prefs.getString(KEY_LANGUAGE, LANG_ENGLISH) ?: LANG_ENGLISH
