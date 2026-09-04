@@ -50,6 +50,16 @@ open class LiquidGlassView @JvmOverloads constructor(
 
     companion object {
         private const val TAG = "LiquidGlassView"
+
+        // 透镜几何自适应：各量相对形状短边的上限比例，以及高光带 / 内阴影带的固定上限（px）。
+        // 折射的上限在 ADAPTIVE_REF_DP 以下额外乘 (短边 / 参考尺寸)，越小收得越快
+        private const val ADAPTIVE_REF_DP = 110f
+        private const val ADAPTIVE_BEVEL_RATIO = 0.3f
+        private const val ADAPTIVE_REFRACT_RATIO = 0.7f
+        private const val ADAPTIVE_RIM_RATIO = 0.05f
+        private const val ADAPTIVE_SHADOW_RATIO = 0.12f
+        private const val RIM_BAND_MAX_PX = 9f
+        private const val SHADOW_BAND_MAX_PX = 28f
         private const val ENABLE_PERFORMANCE_LOG = false  // 性能日志开关（仅调试时打开，每帧构造日志字符串有开销）
         private const val ENABLE_MEMORY_LOG = false  // 内存日志开关（默认关闭，避免日志污染）
 
@@ -469,7 +479,6 @@ open class LiquidGlassView @JvmOverloads constructor(
             }
         }
 
-    /** 色散强度（0-1）：三通道折射差异，边缘光谱边纹宽度（仅透镜管线） */
     /**
      * 边缘柔化（px，仅透镜管线）：折射带内沿法线方向抹匀的宽度，0 = 关。
      * 折射的压缩带在高对比背景上会是一条硬线，给几 px 就软成一段渐变。
@@ -483,6 +492,25 @@ open class LiquidGlassView @JvmOverloads constructor(
             }
         }
 
+    /**
+     * 透镜几何随控件尺寸自适应（仅透镜管线，默认开）
+     *
+     * [bevelWidth] / [refractionHeight] 的默认值是按大面板定的，直接落到 40dp 的按钮上
+     * 整块都是边缘带，贴边高光和内阴影也显得粗。开启后按（最小）形状的短边钳一次：
+     * 斜面 ≤ 短边 × 0.3，高光带上限 ≤ 短边 × 0.05，内阴影带上限 ≤ 短边 × 0.12，
+     * 折射 ≤ 短边 × 0.7 且在 110dp 以下再按 (短边 / 110dp) 平方收——48dp 的按钮约 38px。
+     * 短边达到 110dp 时这几个上限都不低于默认值，中大面板不受影响；显式设的更小的值
+     * 同样不受影响。关掉则一律按设定值原样渲染。
+     */
+    var adaptiveLensScale = true
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
+    /** 色散强度（0-1）：三通道折射差异，边缘光谱边纹宽度（仅透镜管线） */
     var dispersionStrength = 0.10f
         set(value) {
             val clamped = value.coerceIn(0f, 1f)
@@ -952,6 +980,7 @@ open class LiquidGlassView @JvmOverloads constructor(
             edgeSoftness = ta.getDimension(R.styleable.LiquidGlassView_edgeSoftness, edgeSoftness)
             enableSensorHighlight = ta.getBoolean(R.styleable.LiquidGlassView_sensorHighlight, enableSensorHighlight)
             enableAdaptiveTint = ta.getBoolean(R.styleable.LiquidGlassView_adaptiveTint, enableAdaptiveTint)
+            adaptiveLensScale = ta.getBoolean(R.styleable.LiquidGlassView_adaptiveLensScale, adaptiveLensScale)
             glassTint = ta.getColor(R.styleable.LiquidGlassView_glassTint, glassTint)
             // 单独给了强度就覆盖颜色自带的 alpha（app:glassTint="#0A84FF" 这种写法
             // 解析出来 alpha 是 255，不给个强度旋钮就只能是最浓的一档）
@@ -1348,6 +1377,30 @@ open class LiquidGlassView @JvmOverloads constructor(
         val s2hh = if (p2 != null) (p2.height() / 2f).coerceAtLeast(1f) else 0f
         val r2 = if (p2 != null) secondaryShapeCorner.coerceIn(0f, min(s2hw, s2hh)) else 0f
 
+        // —— 尺寸自适应：按最小形状的短边钳斜面 / 折射 / 高光带 / 内阴影带。
+        // 默认值是给大面板定的，小控件照搬整块都是边缘带；短边够大时碰不到上限 ——
+        val bevelEff: Float
+        val refractEff: Float
+        val rimBandMax: Float
+        val shadowMax: Float
+        if (adaptiveLensScale) {
+            var minDim = 2f * min(s1hw, s1hh)
+            if (p2 != null) minDim = min(minDim, 2f * min(s2hw, s2hh))
+            // 折射在参考尺寸（110dp）以下按平方收：48dp 的按钮约 38px，
+            // 110dp 及以上不低于默认值 200px，中等面板的手感不变
+            val refPx = ADAPTIVE_REF_DP * resources.displayMetrics.density
+            val refractCap = ADAPTIVE_REFRACT_RATIO * minDim * min(1f, minDim / refPx)
+            bevelEff = min(bevelWidth, minDim * ADAPTIVE_BEVEL_RATIO).coerceAtLeast(2f)
+            refractEff = min(refractionHeight, refractCap)
+            rimBandMax = min(RIM_BAND_MAX_PX, minDim * ADAPTIVE_RIM_RATIO).coerceAtLeast(2f)
+            shadowMax = min(SHADOW_BAND_MAX_PX, minDim * ADAPTIVE_SHADOW_RATIO).coerceAtLeast(4f)
+        } else {
+            bevelEff = bevelWidth
+            refractEff = refractionHeight
+            rimBandMax = RIM_BAND_MAX_PX
+            shadowMax = SHADOW_BAND_MAX_PX
+        }
+
         // —— 透镜形状：平边方向把矩形推到视图外，那条边上就没有斜面 ——
         var l1cx = s1cx
         var l1cy = s1cy
@@ -1413,8 +1466,10 @@ open class LiquidGlassView @JvmOverloads constructor(
             shape2CX = p2?.centerX() ?: 0f, shape2CY = p2?.centerY() ?: 0f,
             shape2HW = s2hw, shape2HH = s2hh, radius2 = r2,
             blendK = if (p2 != null) shapeBlendSmoothing else 0f,
-            bevel = bevelWidth,
-            refract = refractionHeight,
+            bevel = bevelEff,
+            refract = refractEff,
+            rimBandMax = rimBandMax,
+            shadowMax = shadowMax,
             dispersion = disp,
             lightX = lx, lightY = ly,
             spec = spec,

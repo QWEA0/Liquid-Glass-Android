@@ -104,8 +104,15 @@ glass.enableDynamicBackground = true   // REQUIRED if the backdrop moves or the 
   testing or tuning, use a detailed backdrop, not a flat colour or a soft gradient.
 - **Liquid Glass 2.0 features require API 33+** (AGSL runtime shaders): `material`,
   `bevelWidth`, `refractionHeight`, `dispersionStrength`, `enableSensorHighlight`,
-  `enableAdaptiveTint`, `setSecondaryShape`. They degrade silently below API 33 — the
-  classic blur/aberration pipeline runs instead. No crash, no exception.
+  `enableAdaptiveTint`, `adaptiveLensScale`, `setSecondaryShape`. They degrade silently
+  below API 33 — the classic blur/aberration pipeline runs instead. No crash, no exception.
+- **Small controls are handled automatically.** `adaptiveLensScale` (default `true`, API 33+)
+  caps `bevelWidth`, `refractionHeight` and the rim-highlight / inner-shadow band widths by
+  the shape's short side (bevel ≤ 0.3×, highlight band ≤ 0.05×, shadow band ≤ 0.12×;
+  refraction ≤ 0.7× and, below 110dp, additionally scaled by short side / 110dp, so a
+  48dp button gets ~38px instead of 200px). Shapes of 110dp and up never hit the caps at
+  the defaults and explicit smaller values are kept, so buttons, FABs and toasts need no
+  hand-tuning. Set it to `false` to render the raw values.
 - **API 36+ (Android 16) enables extra polish automatically** — nonlinear vibrancy
   saturation, single-pass rim highlight, per-pixel adaptive tint on the non-lens
   pipelines. No new properties, nothing to configure, silent fallback below 36.

@@ -252,6 +252,7 @@ pipeline; below API 33 they are accepted and silently ignored — no exception i
 | `material` | `GlassMaterial` | `REGULAR` | — | **33+** `REGULAR` = readability first · `CLEAR` = over media |
 | `refractionHeight` | Float | `200f` | 0–300 px | **33+** Dominant knob for lens strength |
 | `bevelWidth` | Float | `40f` | 2–200 px | **33+** Width of the edge "thickness" band |
+| `adaptiveLensScale` | Boolean | `true` | — | **33+** Caps `bevelWidth`, `refractionHeight` and the rim-highlight / inner-shadow bands by the shape's short side (refraction falls off quadratically below 110dp: a 48dp button gets ~38px), so small controls are not all edge band. Shapes of 110dp and up are unaffected at the defaults |
 | `dispersionStrength` | Float | `0.10f` | 0–1 | **33+** Rim spectral fringe. Above ~0.25 reads as rainbow |
 | `enableSensorHighlight` | Boolean | `false` | — | **33+** Specular follows device tilt (gravity sensor) |
 | `enableAdaptiveTint` | Boolean | `false` | — | **33+** Tint adapts to backdrop luminance |
@@ -701,6 +702,7 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 | `material` | `GlassMaterial` | `REGULAR` | — | **33+** `REGULAR` 重可读性 · `CLEAR` 覆盖媒体 |
 | `refractionHeight` | Float | `200f` | 0–300 px | **33+** 透镜强度主控旋钮 |
 | `bevelWidth` | Float | `40f` | 2–200 px | **33+** 边缘"厚度"带宽度 |
+| `adaptiveLensScale` | Boolean | `true` | — | **33+** 按形状短边钳 `bevelWidth`、`refractionHeight` 和高光 / 内阴影带宽度（折射在 110dp 以下按平方收，48dp 的按钮约 38px），小控件不再整块都是边缘带；短边 110dp 以上的面板在默认值下不受影响 |
 | `dispersionStrength` | Float | `0.10f` | 0–1 | **33+** 边缘色散。超过 0.25 会像彩虹 |
 | `enableSensorHighlight` | Boolean | `false` | — | **33+** 高光跟随重力传感器 |
 | `enableAdaptiveTint` | Boolean | `false` | — | **33+** 染色跟随背景亮度 |

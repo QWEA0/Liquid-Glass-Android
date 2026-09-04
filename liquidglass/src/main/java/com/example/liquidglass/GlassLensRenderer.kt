@@ -64,6 +64,8 @@ internal class GlassLensRenderer {
             uniform float2 lightDir;
             uniform float  specStrength;
             uniform float  innerShadow;
+            uniform float  rimBandMax;   // 贴边高光带宽度上限（px，小控件按短边收）
+            uniform float  shadowMax;    // 内阴影带宽度上限（px，小控件按短边收）
             uniform float4 tintColor;
             uniform float  adaptiveTint;
             uniform float4 glassTint;
@@ -234,8 +236,8 @@ internal class GlassLensRenderer {
                 float facingPos = max(facing, 0.0);
                 float facingNeg = max(-facing, 0.0);
 
-                // 贴边窄带（宽度与斜面弱相关，上限 9px）+ 最外层 1px 发丝带
-                float bandW = clamp(bevel * 0.3, 2.0, 9.0);
+                // 贴边窄带（宽度与斜面弱相关，上限默认 9px、小控件按短边收）+ 最外层 1px 发丝带
+                float bandW = clamp(bevel * 0.3, 2.0, rimBandMax);
                 float rim = clamp(1.0 - (-d - 0.5) / bandW, 0.0, 1.0) * cov;
                 float hair = clamp(1.0 - abs(d + 1.0) / 1.5, 0.0, 1.0) * cov;
                 float lobe = pow(facingPos, 2.5);
@@ -244,10 +246,10 @@ internal class GlassLensRenderer {
                              * specStrength * (1.0 - 0.35 * press);
                 col += float3(spec);
 
-                // 内阴影：背光侧边缘内部微暗（宽度独立于斜面，上限 28px），
+                // 内阴影：背光侧边缘内部微暗（宽度独立于斜面，上限默认 28px、小控件按短边收），
                 // 再叠一层贴边压暗与迎光侧的亮线对称——背光侧收成暗边，
                 // 整圈轮廓因此是"迎光渐亮 → 侧向消隐 → 背光渐暗"的连续过渡
-                float shadowW = clamp(bevel, 4.0, 28.0);
+                float shadowW = clamp(bevel, 4.0, shadowMax);
                 float shadowBand = pow(clamp(1.0 + d / shadowW, 0.0, 1.0), 1.5);
                 float ish = shadowBand * facingNeg * innerShadow;
                 float rimDark = (rim * 0.6 + hair * 0.4) * pow(facingNeg, 1.5) * innerShadow;
@@ -277,6 +279,8 @@ internal class GlassLensRenderer {
         val blendK: Float,
         val bevel: Float,
         val refract: Float,
+        val rimBandMax: Float,  // 贴边高光带宽度上限（px）
+        val shadowMax: Float,   // 内阴影带宽度上限（px）
         val dispersion: Float,
         val lightX: Float, val lightY: Float,
         val spec: Float,
@@ -409,6 +413,8 @@ internal class GlassLensRenderer {
         sh.setFloatUniform("lightDir", p.lightX, p.lightY)
         sh.setFloatUniform("specStrength", p.spec)
         sh.setFloatUniform("innerShadow", p.innerShadow)
+        sh.setFloatUniform("rimBandMax", p.rimBandMax)
+        sh.setFloatUniform("shadowMax", p.shadowMax)
         sh.setFloatUniform(
             "tintColor",
             Color.red(p.tint) / 255f,
