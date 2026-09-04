@@ -69,8 +69,8 @@ sibling placed after the background content in a `FrameLayout` (or any overlappi
         android:layout_gravity="center"
         app:cornerRadius="999dp"
         app:glassMaterial="regular"
-        app:refractionHeight="66dp"
-        app:bevelWidth="14dp"
+        app:refractionHeight="12dp"
+        app:bevelWidth="24dp"
         app:dispersionStrength="0.12"
         app:glassTint="#0A84FF"
         app:glassTintStrength="0.3">
@@ -104,9 +104,16 @@ glass.enableDynamicBackground = true   // REQUIRED if the backdrop moves or the 
   testing or tuning, use a detailed backdrop, not a flat colour or a soft gradient.
 - **Liquid Glass 2.0 features require API 33+** (AGSL runtime shaders): `material`,
   `bevelWidth`, `refractionHeight`, `dispersionStrength`, `enableSensorHighlight`,
-  `enableAdaptiveTint`, `adaptiveLensScale`, `refractionOutward`, `setSecondaryShape`. They
-  degrade silently below API 33 — the classic blur/aberration pipeline runs instead. No
-  crash, no exception.
+  `enableAdaptiveTint`, `adaptiveLensScale`, `refractionNoFold`, `refractionOutward`,
+  `setSecondaryShape`. They degrade silently below API 33 — the classic blur/aberration
+  pipeline runs instead. No crash, no exception.
+- **The rim stretches, it does not fold.** Defaults are `bevelWidth = 64f` and
+  `refractionHeight = 32f`, and `refractionNoFold` (default `true`) caps the displacement at
+  `bevelWidth / 2`. That keeps the sampling monotonic: magnification is highest right at the
+  rim and eases to 1× inside, so backdrop content near the edge is pulled and stretched to
+  the edge the way iOS Liquid Glass does. To get "more lens", widen `bevelWidth` (the
+  refraction follows); raising `refractionHeight` alone does nothing past the cap. Set
+  `refractionNoFold = false` only to reproduce the old compressed mirror ring.
 - **Refraction samples inward by default** (`refractionOutward = false`, matching iOS):
   the rim shows a compressed mirror of the content under the glass. `refractionOutward =
   true` (API 33+) is an optional convex-lens mode: the rim bends in content that is still

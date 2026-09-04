@@ -75,11 +75,11 @@ class LiquidGlassToast private constructor(private val activity: Activity) {
     private var dismissing = false
 
     init {
-        // 默认透镜参数是给大面板定的，一条 44dp 高的消息条照搬会只剩压缩带
+        // 默认斜面是给大面板定的，一条 44dp 高的消息条按高度收一档，折射取斜面的一半
         glass.apply {
             cornerRadius = 999f
             bevelWidth = dpF(14f)
-            refractionHeight = dpF(22f)
+            refractionHeight = dpF(7f)
             edgeSoftness = dpF(3f)
             blurAmount = 0.25f
             enableAdaptiveTint = true

@@ -58,7 +58,7 @@ open class LiquidGlassView @JvmOverloads constructor(
         private const val ADAPTIVE_REFRACT_RATIO = 0.7f
         private const val ADAPTIVE_RIM_RATIO = 0.05f
         private const val ADAPTIVE_SHADOW_RATIO = 0.12f
-        private const val RIM_BAND_MAX_PX = 9f
+        private const val RIM_BAND_MAX_PX = 6f
         private const val SHADOW_BAND_MAX_PX = 28f
         private const val ENABLE_PERFORMANCE_LOG = false  // 性能日志开关（仅调试时打开，每帧构造日志字符串有开销）
         private const val ENABLE_MEMORY_LOG = false  // 内存日志开关（默认关闭，避免日志污染）
@@ -459,8 +459,8 @@ open class LiquidGlassView @JvmOverloads constructor(
             }
         }
 
-    /** 边缘斜面带宽度（px）：玻璃"厚度"的视觉宽度（仅透镜管线） */
-    var bevelWidth = 40f
+    /** 边缘斜面带宽度（px）：玻璃"厚度"的视觉宽度，折射和高光都落在这一圈里（仅透镜管线） */
+    var bevelWidth = 64f
         set(value) {
             val clamped = value.coerceIn(2f, 200f)
             if (field != clamped) {
@@ -469,8 +469,11 @@ open class LiquidGlassView @JvmOverloads constructor(
             }
         }
 
-    /** 边缘最大折射位移（px）：透镜弯折强度（仅透镜管线；采样有安全钳制，大值也不会越界） */
-    var refractionHeight = 200f
+    /**
+     * 边缘最大折射位移（px，仅透镜管线）。[refractionNoFold] 开着时实际生效值不超过
+     * 斜面宽度的一半，边缘只做放大延展；想要更强的透镜感先加宽 [bevelWidth]
+     */
+    var refractionHeight = 32f
         set(value) {
             val clamped = value.coerceIn(0f, 300f)
             if (field != clamped) {
@@ -518,6 +521,21 @@ open class LiquidGlassView @JvmOverloads constructor(
      * 此时录制区要外扩到折射距离，并多一层离屏合成。
      */
     var refractionOutward = false
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
+    /**
+     * 折射不翻折（仅透镜管线，默认开，与 iOS 一致）
+     *
+     * 位移钳在斜面宽度的一半以内，采样坐标沿深度单调：贴边处放大率无穷大、往内平滑降到 1，
+     * 边缘附近的内容被拉伸延展到边上，像真的玻璃厚边。false 允许位移超过这个比例，
+     * 采样会折返，边缘变成旧版那种把内侧背景折叠数次的压缩镜像环。
+     */
+    var refractionNoFold = true
         set(value) {
             if (field != value) {
                 field = value
@@ -997,6 +1015,7 @@ open class LiquidGlassView @JvmOverloads constructor(
             enableAdaptiveTint = ta.getBoolean(R.styleable.LiquidGlassView_adaptiveTint, enableAdaptiveTint)
             adaptiveLensScale = ta.getBoolean(R.styleable.LiquidGlassView_adaptiveLensScale, adaptiveLensScale)
             refractionOutward = ta.getBoolean(R.styleable.LiquidGlassView_refractionOutward, refractionOutward)
+            refractionNoFold = ta.getBoolean(R.styleable.LiquidGlassView_refractionNoFold, refractionNoFold)
             glassTint = ta.getColor(R.styleable.LiquidGlassView_glassTint, glassTint)
             // 单独给了强度就覆盖颜色自带的 alpha（app:glassTint="#0A84FF" 这种写法
             // 解析出来 alpha 是 255，不给个强度旋钮就只能是最浓的一档）
@@ -1416,6 +1435,9 @@ open class LiquidGlassView @JvmOverloads constructor(
             rimBandMax = RIM_BAND_MAX_PX
             shadowMax = SHADOW_BAND_MAX_PX
         }
+        // 不翻折：位移 ≤ 斜面宽度的一半时采样坐标沿深度单调（贴边放大率无穷大、往内降到 1），
+        // 边缘只做放大延展；超过这个比例采样会折返，出现旧版那种压缩镜像环
+        val refractFinal = if (refractionNoFold) min(refractEff, bevelEff * 0.5f) else refractEff
 
         // —— 透镜形状：平边方向把矩形推到视图外，那条边上就没有斜面 ——
         var l1cx = s1cx
@@ -1469,7 +1491,7 @@ open class LiquidGlassView @JvmOverloads constructor(
 
         // 向外折射时录制区要盖住折射的最大采样距离（按压时多出的 60% 不算，越界由采样安全区兜底）
         val rimSoft = (edgeSoftness * 2f).toInt() / 2f
-        val margin = computeLensMargin(radius, if (refractionOutward) refractEff + rimSoft + 8f else 0f)
+        val margin = computeLensMargin(radius, if (refractionOutward) refractFinal + rimSoft + 8f else 0f)
 
         // —— 染色：Regular + 自适应时改走着色器内逐像素染色；tint 固定传 0，
         // 避免亮度采样 tick 更新全局染色触发无意义的 effect 重建 ——
@@ -1485,7 +1507,7 @@ open class LiquidGlassView @JvmOverloads constructor(
             shape2HW = s2hw, shape2HH = s2hh, radius2 = r2,
             blendK = if (p2 != null) shapeBlendSmoothing else 0f,
             bevel = bevelEff,
-            refract = refractEff,
+            refract = refractFinal,
             outward = refractionOutward,
             rimBandMax = rimBandMax,
             shadowMax = shadowMax,

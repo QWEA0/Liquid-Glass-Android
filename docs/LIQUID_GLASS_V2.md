@@ -59,8 +59,9 @@ backdrop 录制（带 margin 外扩）
 |---|---|---|
 | `useShaderPipeline` | true | 透镜管线总开关（false = 旧 GPU 管线，A/B 对比用） |
 | `material` | REGULAR | `GlassMaterial.REGULAR`（自适应重可读性）/ `CLEAR`（高透 + 压暗层） |
-| `bevelWidth` | 40px | 边缘斜面带宽度（玻璃"厚度"，2-200） |
-| `refractionHeight` | 200px | 边缘最大折射位移（0-300，采样有安全钳制） |
+| `bevelWidth` | 64px | 边缘斜面带宽度（玻璃"厚度"，2-200） |
+| `refractionHeight` | 32px | 边缘最大折射位移（0-300；refractionNoFold 开着时钳在斜面宽度的一半以内） |
+| `refractionNoFold` | true | 折射单调不翻折：贴边放大率最高、往内降到 1，边缘只放大延展（与 iOS 一致）；false 允许折返成压缩镜像环 |
 | `refractionOutward` | false | 可选的凸透镜模式：true 向外采样（形状外的背景弯进边缘）；默认向内压缩镜像，与 iOS 一致 |
 | `adaptiveLensScale` | true | 斜面 / 折射 / 高光带 / 内阴影带按形状短边钳，小控件不再整块都是边缘带 |
 | `dispersionStrength` | 0.10 | 色散强度（与色差/色散开关及其滑杆联动） |

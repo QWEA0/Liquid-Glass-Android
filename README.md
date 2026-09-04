@@ -169,8 +169,8 @@ drawn **behind** it, so the background content must come first in an overlapping
         android:layout_gravity="center"
         app:cornerRadius="999dp"
         app:glassMaterial="regular"
-        app:refractionHeight="66dp"
-        app:bevelWidth="14dp"
+        app:refractionHeight="12dp"
+        app:bevelWidth="24dp"
         app:dispersionStrength="0.12"
         app:sensorHighlight="true"
         app:adaptiveTint="true">
@@ -214,8 +214,8 @@ That is the whole integration. Everything below is optional tuning.
 ```kotlin
 // --- Liquid Glass 2.0 lens pipeline (API 33+, silently no-ops below) ---
 glass.material = GlassMaterial.REGULAR      // REGULAR (readability) | CLEAR (over media)
-glass.refractionHeight = 200f               // dominant knob: how much lens. px, 0-300
-glass.bevelWidth = 40f                      // glass "thickness" band. px, 2-200
+glass.refractionHeight = 32f                // edge displacement, capped at bevelWidth / 2. px
+glass.bevelWidth = 64f                      // glass "thickness" band. px, 2-200
 glass.dispersionStrength = 0.10f            // rim spectral fringe, 0-1. >0.25 reads as rainbow
 glass.enableSensorHighlight = true          // highlight tracks device tilt
 glass.enableAdaptiveTint = true             // tint follows backdrop luminance
@@ -250,8 +250,9 @@ pipeline; below API 33 they are accepted and silently ignored — no exception i
 | `enableDynamicBackground` | Boolean | `false` | — | **Set to `true`** if the backdrop or the glass moves. Otherwise the backdrop is captured once. |
 | `cornerRadius` | Float | `999f` | px | `999f` = pill. The SDF tracks this, so refraction follows the radius. |
 | `material` | `GlassMaterial` | `REGULAR` | — | **33+** `REGULAR` = readability first · `CLEAR` = over media |
-| `refractionHeight` | Float | `200f` | 0–300 px | **33+** Dominant knob for lens strength |
-| `bevelWidth` | Float | `40f` | 2–200 px | **33+** Width of the edge "thickness" band |
+| `refractionHeight` | Float | `32f` | 0–300 px | **33+** Edge displacement. Capped at `bevelWidth / 2` while `refractionNoFold` is on, so the rim stretches content instead of folding it; widen `bevelWidth` for a stronger lens |
+| `bevelWidth` | Float | `64f` | 2–200 px | **33+** Width of the edge "thickness" band — refraction and highlight both live in it |
+| `refractionNoFold` | Boolean | `true` | — | **33+** Keeps the refraction monotonic (displacement ≤ `bevelWidth / 2`): content near the rim is magnified and stretched to the edge, like iOS. `false` allows larger displacements, which fold the backdrop into the old compressed mirror ring |
 | `adaptiveLensScale` | Boolean | `true` | — | **33+** Caps `bevelWidth`, `refractionHeight` and the rim-highlight / inner-shadow bands by the shape's short side (refraction falls off quadratically below 110dp: a 48dp button gets ~38px), so small controls are not all edge band. Shapes of 110dp and up are unaffected at the defaults |
 | `refractionOutward` | Boolean | `false` | — | **33+** Optional convex-lens mode. `false` (default, matches iOS) samples inward: the rim is a compressed mirror of the interior. `true` samples **outward**: content just outside the shape is bent into the rim before it passes under the glass, and content under the glass stretches along the edge |
 | `dispersionStrength` | Float | `0.10f` | 0–1 | **33+** Rim spectral fringe. Above ~0.25 reads as rainbow |
@@ -620,8 +621,8 @@ dependencies {
         android:layout_gravity="center"
         app:cornerRadius="999dp"
         app:glassMaterial="regular"
-        app:refractionHeight="66dp"
-        app:bevelWidth="14dp"
+        app:refractionHeight="12dp"
+        app:bevelWidth="24dp"
         app:dispersionStrength="0.12"
         app:sensorHighlight="true"
         app:adaptiveTint="true">
@@ -665,8 +666,8 @@ class MainActivity : AppCompatActivity() {
 ```kotlin
 // --- Liquid Glass 2.0 透镜管线（API 33+，低版本静默降级，不抛异常）---
 glass.material = GlassMaterial.REGULAR      // REGULAR 重可读性 | CLEAR 覆盖媒体内容
-glass.refractionHeight = 200f               // 主控旋钮：透镜强度。px，0-300
-glass.bevelWidth = 40f                      // 玻璃"厚度"带宽度。px，2-200
+glass.refractionHeight = 32f                // 边缘折射位移，钳在 bevelWidth / 2 以内。px
+glass.bevelWidth = 64f                      // 玻璃"厚度"带宽度。px，2-200
 glass.dispersionStrength = 0.10f            // 边缘色散，0-1。超过 0.25 会像彩虹而不像玻璃
 glass.enableSensorHighlight = true          // 高光跟随设备倾斜
 glass.enableAdaptiveTint = true             // 染色跟随背景明暗
@@ -701,8 +702,9 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 | `enableDynamicBackground` | Boolean | `false` | — | 背景或玻璃会动时**必须设为 `true`**，否则背景只捕获一次 |
 | `cornerRadius` | Float | `999f` | px | `999f` = 药丸形。SDF 跟随此值，折射随圆角变化 |
 | `material` | `GlassMaterial` | `REGULAR` | — | **33+** `REGULAR` 重可读性 · `CLEAR` 覆盖媒体 |
-| `refractionHeight` | Float | `200f` | 0–300 px | **33+** 透镜强度主控旋钮 |
-| `bevelWidth` | Float | `40f` | 2–200 px | **33+** 边缘"厚度"带宽度 |
+| `refractionHeight` | Float | `32f` | 0–300 px | **33+** 边缘折射位移。`refractionNoFold` 开着时钳在 `bevelWidth / 2` 以内，边缘只拉伸不翻折；想要更强的透镜感先加宽 `bevelWidth` |
+| `bevelWidth` | Float | `64f` | 2–200 px | **33+** 边缘"厚度"带宽度，折射和高光都落在这一圈里 |
+| `refractionNoFold` | Boolean | `true` | — | **33+** 折射保持单调（位移 ≤ `bevelWidth / 2`）：边缘附近的内容被放大拉伸到边上，与 iOS 一致。`false` 允许更大位移，背景会折返成旧版的压缩镜像环 |
 | `adaptiveLensScale` | Boolean | `true` | — | **33+** 按形状短边钳 `bevelWidth`、`refractionHeight` 和高光 / 内阴影带宽度（折射在 110dp 以下按平方收，48dp 的按钮约 38px），小控件不再整块都是边缘带；短边 110dp 以上的面板在默认值下不受影响 |
 | `refractionOutward` | Boolean | `false` | — | **33+** 可选的凸透镜模式。`false`（默认，与 iOS 一致）向内采样，边缘是内侧内容的压缩镜像；`true` **向外**采样，形状外的内容还没进到玻璃下面就先被弯进边缘，进来之后沿边缘延展 |
 | `dispersionStrength` | Float | `0.10f` | 0–1 | **33+** 边缘色散。超过 0.25 会像彩虹 |

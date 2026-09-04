@@ -252,10 +252,10 @@ open class LiquidGlassListItem @JvmOverloads constructor(
         isFocusable = true
         // 列表行不做按压缩放 / 手指凸起：一按整行缩小，行间会露出缝
         enablePressEffect = false
-        // 默认透镜参数是给大面板定的（斜面 40px、折射 200px），一行只有 56–72dp 高，
-        // 照搬会让压缩带占掉半行、变成一条硬线；这里按行高收一档，再给边缘一点柔化
+        // 默认斜面是给大面板定的，一行只有 56–72dp 高，这里按行高收一档，
+        // 折射取斜面的一半（不翻折的上限），再给边缘一点柔化
         bevelWidth = dpF(14f)
-        refractionHeight = dpF(22f)
+        refractionHeight = dpF(7f)
         edgeSoftness = dpF(3f)
         blurAmount = 0.10f
 

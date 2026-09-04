@@ -74,3 +74,6 @@ keystore.properties
 *.jks
 *.keystore
 AGENTS.md
+
+# iOS 参考录屏帧（本地素材）
+cropped_frames/

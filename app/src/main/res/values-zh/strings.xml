@@ -202,6 +202,7 @@
     <string name="material_clear">高透</string>
     <string name="switch_sensor_highlight">传感器高光</string>
     <string name="switch_adaptive_tint">背景亮度自适应</string>
+    <string name="switch_refraction_no_fold">折射不翻折（iOS 式拉伸）</string>
     <string name="switch_refraction_outward">向外折射（凸透镜）</string>
     <string name="switch_adaptive_lens_scale">透镜尺寸自适应（小控件）</string>
     <string name="lens_bevel">斜面宽度: %.0f px</string>

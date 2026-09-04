@@ -279,9 +279,9 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             text = getString(R.string.github_star_button)
             setTextSize(13f)
             textView.setPadding(dp(16), dp(9), dp(16), dp(9))
-            // 小胶囊：库默认的斜面 / 折射是给大面板定的，照搬整块都是边缘带
+            // 小胶囊：库默认的斜面是给大面板定的，按高度收一档，折射取斜面的一半
             bevelWidth = dpF(14)
-            refractionHeight = dpF(22)
+            refractionHeight = dpF(7)
             edgeSoftness = dpF(3)
             setOnClickListener { openRepo() }
             layoutParams = FrameLayout.LayoutParams(
@@ -1887,6 +1887,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         target.enableSensorHighlight = src.enableSensorHighlight
         target.enableAdaptiveTint = src.enableAdaptiveTint
         target.refractionOutward = src.refractionOutward
+        target.refractionNoFold = src.refractionNoFold
         target.adaptiveLensScale = src.adaptiveLensScale
         target.glassTint = src.glassTint
         target.accessibilityMode = src.accessibilityMode
@@ -2164,6 +2165,9 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         }
         addSwitchRow(group, getString(R.string.switch_adaptive_tint), glassView.enableAdaptiveTint) { checked ->
             applyGlass { it.enableAdaptiveTint = checked }
+        }
+        addSwitchRow(group, getString(R.string.switch_refraction_no_fold), glassView.refractionNoFold) { checked ->
+            applyGlass { it.refractionNoFold = checked }
         }
         addSwitchRow(group, getString(R.string.switch_refraction_outward), glassView.refractionOutward) { checked ->
             applyGlass { it.refractionOutward = checked }

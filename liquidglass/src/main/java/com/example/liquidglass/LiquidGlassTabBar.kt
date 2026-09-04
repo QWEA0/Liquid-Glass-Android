@@ -102,7 +102,7 @@ open class LiquidGlassTabBar @JvmOverloads constructor(
             // iOS 的滴内部平坦、只在边缘轻微弯折——斜面窄、折射浅，
             // 否则贴近边缘的标签文字会被折射出放大的副本
             bevelWidth = dpF(8)
-            refractionHeight = dpF(5)
+            refractionHeight = dpF(4)
             dispersionStrength = 0.04f
             visibility = GONE
         }
