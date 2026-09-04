@@ -176,6 +176,9 @@
     <!-- Liquid Glass 2.0（透镜管线） -->
     <string name="scene_merge">融合</string>
     <string name="scene_home">桌面</string>
+    <string name="scene_control_center">控制中心</string>
+    <string name="cc_page_main">主页</string>
+    <string name="cc_page_connectivity">网络</string>
     <string name="scene_list">列表</string>
     <string name="scene_text">文字</string>
     <string name="text_scene_hint">输入文字，实时变成玻璃</string>

@@ -17,6 +17,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -39,6 +40,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -73,6 +75,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     private enum class Scene(val labelRes: Int) {
         PLAYGROUND(R.string.scene_playground),
         HOME(R.string.scene_home),
+        CONTROL_CENTER(R.string.scene_control_center),
         MERGE(R.string.scene_merge),
         BACKDROP(R.string.scene_backdrop),
         LIST(R.string.scene_list),
@@ -99,6 +102,17 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     }
 
     private var backdropMode = BackdropMode.SIBLING
+
+    /** 控制中心对照场景的页面：主页 / 展开的网络模块 */
+    private enum class ControlCenterPage(val labelRes: Int) {
+        MAIN(R.string.cc_page_main),
+        CONNECTIVITY(R.string.cc_page_connectivity)
+    }
+
+    private var controlCenterPage = ControlCenterPage.MAIN
+
+    /** 控制中心场景的背景：桌面截图整屏模糊后的位图，跨页复用 */
+    private var controlCenterBackdrop: Bitmap? = null
 
     // ==================== 视图 ====================
 
@@ -128,6 +142,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
 
     /** 状态栏高度，由 window insets 回填。场景里顶部对齐的文字/组件靠它避开状态栏与性能悬浮窗 */
     private var systemBarTop = 0
+    private var systemBarBottom = 0
 
     private var customBackgroundBitmap: Bitmap? = null
     private var scenicBitmap: Bitmap? = null
@@ -319,6 +334,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             val topChanged = bars.top != systemBarTop
             systemBarTop = bars.top
+            systemBarBottom = bars.bottom
             // 首个场景在 onCreate 里就建好了，那时 systemBarTop 还是 0；
             // 靠它避开状态栏 / 性能悬浮窗的场景内控件要等 inset 到了再重建一次
             if (topChanged) sceneHost.post { showScene(currentScene) }
@@ -455,6 +471,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         val root = when (scene) {
             Scene.PLAYGROUND -> buildPlaygroundScene()
             Scene.HOME -> buildHomeScene()
+            Scene.CONTROL_CENTER -> buildControlCenterScene()
             Scene.MERGE -> buildMergeScene()
             Scene.BACKDROP -> buildBackdropScene()
             Scene.LIST -> buildListScene()
@@ -1253,6 +1270,262 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         })
         root.addView(glassView)
         return root
+    }
+
+    /**
+     * 场景：iOS 控制中心对照 —— 用同一张 iOS 26 桌面截图做背景，按控制中心的尺寸网格
+     * （430pt 宽的屏幕上：72pt 单元、16pt 间距、47pt 边距）摆玻璃模块，和真机截图逐像素
+     * 对比差距。两页可切换：主页、展开的网络模块。
+     *
+     * 控制中心的底子是"整屏模糊 + 压暗"，玻璃再在上面采样。背景用库的 CPU 模糊做一次
+     * 存成位图，不用 RenderEffect：每块玻璃采样父容器时都会把整屏模糊重跑一遍。
+     * 尺寸按 pt 写，乘 屏幕宽 / 430 折算，窄屏上整体等比缩小。
+     * 模块里的文字照抄 iOS 的英文，不做本地化，方便和截图对齐；图标用系统自带的近似替代。
+     */
+    private fun buildControlCenterScene(): View {
+        val matchParent = FrameLayout.LayoutParams.MATCH_PARENT
+        val wrapContent = FrameLayout.LayoutParams.WRAP_CONTENT
+        val root = FrameLayout(this)
+        val stage = FrameLayout(this)
+        root.addView(stage, FrameLayout.LayoutParams(matchParent, matchParent))
+
+        val backdrop = controlCenterBackdrop
+            ?: buildControlCenterBackdrop().also { controlCenterBackdrop = it }
+        stage.addView(ImageView(this).apply {
+            setImageBitmap(backdrop)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+        }, FrameLayout.LayoutParams(matchParent, matchParent))
+        // 压暗层：控制中心把桌面压到近黑
+        stage.addView(View(this).apply { setBackgroundColor(0x5C000000) },
+            FrameLayout.LayoutParams(matchParent, matchParent))
+
+        val scale = resources.displayMetrics.widthPixels / 430f
+        fun pt(v: Float): Int = (v * scale).toInt()
+        fun ptF(v: Float): Float = v * scale
+
+        val blue = 0xFF0A84FF.toInt()
+        val green = 0xFF30D158.toInt()
+        val white = Color.WHITE
+        val dim = 0xB3FFFFFF.toInt()
+        val inactive = 0x40FFFFFF
+
+        var firstGlass: LiquidGlassView? = null
+        // 玻璃模块：底子已经模糊过，玻璃自己只留一点点模糊；磨砂的发白用 glassTint 的
+        // 白色散射做（暗处提亮多、亮处提亮少，且跟随形状）；边带按模块尺寸给，折射取斜面一半
+        fun glass(x: Float, y: Float, w: Float, h: Float, radiusPt: Float, bevelPt: Float = 14f): LiquidGlassView {
+            val v = LiquidGlassView(this).apply {
+                enableDynamicBackground = true
+                cornerRadius = ptF(radiusPt)
+                enableAdaptiveTint = false
+                enableSensorHighlight = false
+                enablePressEffect = false
+                blurAmount = 0.04f
+                bevelWidth = ptF(bevelPt)
+                refractionHeight = ptF(bevelPt / 2f)
+                edgeSoftness = ptF(2f)
+                dispersionStrength = 0.06f
+                edgeHighlightOpacity = 80f
+                glassTint = 0x59FFFFFF
+            }
+            stage.addView(v, FrameLayout.LayoutParams(pt(w), pt(h)).apply {
+                leftMargin = pt(x)
+                topMargin = pt(y)
+            })
+            extraGlassViews += v
+            if (firstGlass == null) firstGlass = v
+            return v
+        }
+        fun icon(parent: ViewGroup, res: Int, x: Float, y: Float, size: Float, tint: Int = white) {
+            parent.addView(ImageView(this).apply {
+                setImageResource(res)
+                imageTintList = ColorStateList.valueOf(tint)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            }, FrameLayout.LayoutParams(pt(size), pt(size)).apply {
+                leftMargin = pt(x)
+                topMargin = pt(y)
+            })
+        }
+        // 实心圆按钮：激活态蓝 / 绿，非激活半透明白
+        fun dot(
+            parent: ViewGroup, x: Float, y: Float, size: Float, color: Int, res: Int,
+            iconTint: Int = white, iconPt: Float = size * 0.5f
+        ) {
+            val circle = FrameLayout(this).apply {
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(color)
+                }
+            }
+            icon(circle, res, (size - iconPt) / 2f, (size - iconPt) / 2f, iconPt, iconTint)
+            parent.addView(circle, FrameLayout.LayoutParams(pt(size), pt(size)).apply {
+                leftMargin = pt(x)
+                topMargin = pt(y)
+            })
+        }
+        fun label(parent: ViewGroup, text: String, x: Float, y: Float, sizePt: Float, color: Int, bold: Boolean = false) {
+            parent.addView(TextView(this).apply {
+                this.text = text
+                setTextSize(TypedValue.COMPLEX_UNIT_PX, ptF(sizePt))
+                setTextColor(color)
+                if (bold) typeface = Typeface.DEFAULT_BOLD
+                includeFontPadding = false
+            }, FrameLayout.LayoutParams(wrapContent, wrapContent).apply {
+                leftMargin = pt(x)
+                topMargin = pt(y)
+            })
+        }
+        // 文本符号图标（系统没有对应矢量图的：太阳、月亮、心形），居中放在 box 里
+        fun glyph(parent: ViewGroup, text: String, x: Float, y: Float, boxPt: Float, sizePt: Float, color: Int) {
+            parent.addView(TextView(this).apply {
+                this.text = text
+                setTextSize(TypedValue.COMPLEX_UNIT_PX, ptF(sizePt))
+                setTextColor(color)
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+            }, FrameLayout.LayoutParams(pt(boxPt), pt(boxPt)).apply {
+                leftMargin = pt(x)
+                topMargin = pt(y)
+            })
+        }
+        // 实心圆 + 文本符号
+        fun dotGlyph(parent: ViewGroup, x: Float, y: Float, size: Float, color: Int, text: String, sizePt: Float) {
+            val circle = FrameLayout(this).apply {
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(color)
+                }
+            }
+            glyph(circle, text, 0f, 0f, size, sizePt, white)
+            parent.addView(circle, FrameLayout.LayoutParams(pt(size), pt(size)).apply {
+                leftMargin = pt(x)
+                topMargin = pt(y)
+            })
+        }
+        // 圆形玻璃按钮
+        fun glassButton(x: Float, y: Float, res: Int, iconPt: Float = 30f) =
+            glass(x, y, 72f, 72f, 36f, 12f).also {
+                icon(it, res, (72f - iconPt) / 2f, (72f - iconPt) / 2f, iconPt)
+            }
+        // 子视图裁到圆角内（滑杆的填充）
+        fun clipRounded(v: View, radiusPt: Float) {
+            v.outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, ptF(radiusPt))
+                }
+            }
+            v.clipToOutline = true
+        }
+
+        when (controlCenterPage) {
+            ControlCenterPage.MAIN -> {
+                // 网络模块 2×2：大圆 60pt，右下 2×2 小圆 28pt
+                glass(47f, 137f, 160f, 160f, 40f).also { t ->
+                    dot(t, 14f, 15f, 60f, inactive, android.R.drawable.ic_menu_send)
+                    dot(t, 88f, 15f, 60f, blue, android.R.drawable.ic_menu_share)
+                    dot(t, 14f, 88f, 60f, blue, android.R.drawable.ic_menu_mylocation)
+                    dot(t, 88f, 88f, 28f, green, android.R.drawable.ic_menu_sort_by_size, iconPt = 16f)
+                    dot(t, 118f, 88f, 28f, blue, android.R.drawable.stat_sys_data_bluetooth, iconPt = 16f)
+                    dot(t, 88f, 118f, 28f, inactive, android.R.drawable.ic_menu_upload, iconPt = 16f)
+                    dot(t, 118f, 118f, 28f, inactive, android.R.drawable.ic_dialog_map, iconPt = 16f)
+                }
+                // 正在播放
+                glass(223f, 137f, 160f, 160f, 40f).also { t ->
+                    t.addView(View(this).apply {
+                        background = GradientDrawable().apply {
+                            cornerRadius = ptF(14f)
+                            setColor(0x4DFFFFFF)
+                        }
+                    }, FrameLayout.LayoutParams(pt(60f), pt(60f)).apply {
+                        leftMargin = pt(14f)
+                        topMargin = pt(14f)
+                    })
+                    dot(t, 112f, 16f, 36f, 0x33FFFFFF, android.R.drawable.ic_menu_slideshow, iconPt = 20f)
+                    label(t, "Not Playing", 16f, 84f, 17f, white, bold = true)
+                    icon(t, android.R.drawable.ic_media_rew, 24f, 118f, 26f, dim)
+                    icon(t, android.R.drawable.ic_media_play, 66f, 116f, 30f)
+                    icon(t, android.R.drawable.ic_media_ff, 110f, 118f, 26f, dim)
+                }
+                // 第二行：旋转锁（激活：白底红图标）、屏幕镜像、亮度、音量
+                dot(stage, 47f, 315f, 72f, 0xF2FFFFFF.toInt(), android.R.drawable.ic_menu_rotate,
+                    iconTint = 0xFFFF453A.toInt(), iconPt = 36f)
+                glassButton(135f, 315f, android.R.drawable.ic_menu_gallery)
+                glass(224f, 315f, 72f, 160f, 36f, 12f).also { t ->
+                    clipRounded(t, 36f)
+                    t.addView(View(this).apply { setBackgroundColor(0xF2FFFFFF.toInt()) },
+                        FrameLayout.LayoutParams(matchParent, pt(52f), Gravity.BOTTOM))
+                    glyph(t, "☼", 18f, 108f, 36f, 34f, 0xFFFFB800.toInt())
+                }
+                glass(312f, 315f, 72f, 160f, 36f, 12f).also { t ->
+                    icon(t, android.R.drawable.ic_lock_silent_mode, 18f, 110f, 36f)
+                }
+                // 专注模式
+                glass(47f, 402f, 160f, 72f, 36f, 12f).also { t ->
+                    dotGlyph(t, 13f, 13f, 46f, 0x59000000, "☾", 24f)
+                    label(t, "Focus", 72f, 25f, 17f, white, bold = true)
+                }
+                // 第四、五行圆形按钮
+                glassButton(47f, 491f, android.R.drawable.ic_lock_idle_charging)
+                glassButton(135f, 491f, android.R.drawable.ic_menu_recent_history)
+                glassButton(224f, 491f, android.R.drawable.ic_dialog_dialer)
+                glassButton(312f, 491f, android.R.drawable.ic_menu_camera)
+                glassButton(47f, 580f, android.R.drawable.ic_menu_crop)
+                glassButton(135f, 580f, android.R.drawable.ic_lock_power_off)
+                // 右侧页面指示
+                glyph(stage, "♡", 392f, 392f, 28f, 24f, white)
+                glyph(stage, "♪", 392f, 448f, 28f, 24f, dim)
+            }
+            ControlCenterPage.CONNECTIVITY -> {
+                fun row(y: Float, res: Int, active: Boolean, title: String, sub: String, titleColor: Int = white) =
+                    glass(47f, y, 336f, 72f, 36f, 12f).also { t ->
+                        dot(t, 14f, 14f, 44f, if (active) blue else inactive, res,
+                            iconTint = if (active) white else dim, iconPt = 24f)
+                        label(t, title, 72f, 15f, 20f, titleColor, bold = true)
+                        label(t, sub, 72f, 41f, 17f, dim)
+                    }
+                fun tile(x: Float, y: Float, res: Int, color: Int, title: String, sub: String) =
+                    glass(x, y, 160f, 160f, 40f).also { t ->
+                        dot(t, 14f, 15f, 44f, color, res, iconPt = 24f)
+                        label(t, title, 14f, 108f, 20f, white, bold = true)
+                        label(t, sub, 14f, 134f, 16f, dim)
+                    }
+                row(120f, android.R.drawable.ic_menu_send, false, "Airplane Mode", "Off")
+                tile(47f, 209f, android.R.drawable.ic_menu_mylocation, blue, "Wi-Fi", "Office-5G")
+                tile(223f, 209f, android.R.drawable.ic_menu_share, blue, "AirDrop", "Contacts Only")
+                tile(47f, 385f, android.R.drawable.ic_menu_sort_by_size, green, "Cellular Data", "Primary")
+                tile(223f, 385f, android.R.drawable.stat_sys_data_bluetooth, blue, "Bluetooth", "On")
+                row(562f, android.R.drawable.ic_menu_upload, false, "Personal Hotspot", "Off")
+                row(651f, android.R.drawable.ic_dialog_map, false, "VPN", "Off", titleColor = dim)
+            }
+        }
+
+        root.addView(
+            buildChipToggle(
+                ControlCenterPage.entries.map { getString(it.labelRes) },
+                controlCenterPage.ordinal
+            ) { index ->
+                controlCenterPage = ControlCenterPage.entries[index]
+                showScene(Scene.CONTROL_CENTER)
+            },
+            FrameLayout.LayoutParams(wrapContent, wrapContent).apply {
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                bottomMargin = systemBarBottom + dp(72)
+            }
+        )
+        statsSource = firstGlass
+        return root
+    }
+
+    /** 桌面截图按 1/4 解码，用库的 CPU 盒式模糊跑两遍（约 30dp 高斯的量），跨页复用 */
+    private fun buildControlCenterBackdrop(): Bitmap {
+        val opts = BitmapFactory.Options().apply { inSampleSize = 4 }
+        val src = BitmapFactory.decodeResource(resources, R.drawable.ios_control_center_bg, opts)
+        val blur = AdvancedFastBlur()
+        val pass1 = blur.blur(src, 25f, 1f)
+        val pass2 = blur.blur(pass1, 25f, 1f)
+        // 模糊结果来自库的位图池，拷一份自己持有
+        val result = pass2.copy(Bitmap.Config.ARGB_8888, false)
+        src.recycle()
+        return result
     }
 
     /** 场景 4：液态融合（拖动圆形玻璃靠近胶囊 dock，边缘 smin 黏连合并；API 33+） */
@@ -2713,6 +2986,8 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         customBackgroundBitmap = null
         scenicBitmap?.recycle()
         scenicBitmap = null
+        controlCenterBackdrop?.recycle()
+        controlCenterBackdrop = null
     }
 
     @Deprecated("Deprecated in Java")

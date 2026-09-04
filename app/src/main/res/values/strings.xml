@@ -176,6 +176,9 @@
     <!-- Liquid Glass 2.0 (Lens Pipeline) -->
     <string name="scene_merge">Merge</string>
     <string name="scene_home">Home</string>
+    <string name="scene_control_center">Control Center</string>
+    <string name="cc_page_main">Main</string>
+    <string name="cc_page_connectivity">Connectivity</string>
     <string name="scene_list">List</string>
     <string name="scene_text">Text</string>
     <string name="text_scene_hint">Type anything — it becomes glass</string>
