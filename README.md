@@ -115,10 +115,11 @@ hero scene used for the screenshots at the top:
 adb shell am start -n com.example.liquidglass/com.example.liquidglass.HeroShowcaseActivity
 ```
 
-The **Control Center** scene is a pixel-measured replica of the iOS 26 Control Center (main page,
-and the expanded connectivity page — tap the connectivity tile) over the same wallpaper, so you can
-put it next to a real iPhone and compare the glass itself. It hides the demo chrome and system bars;
-tap the power icon in the top-right corner to bring them back.
+The **Control Center** scene is a pixel-measured replica of the iOS 26 Control Center over the same
+home screen: pull down to open it, swipe up to close, tap the connectivity tile for the expanded page,
+drag the sliders and toggle the buttons — so you can put it next to a real iPhone and compare the glass
+itself. It hides the demo chrome and system bars; tap the power icon in the top-right corner to bring
+them back.
 
 ```bash
 adb shell am start -n com.example.liquidglass/com.example.liquidglass.ProfessionalDemoActivity --es scene control_center
@@ -577,8 +578,8 @@ Inspired by the glassmorphism design trend and liquid-glass-react library.
 adb shell am start -n com.example.liquidglass/com.example.liquidglass.HeroShowcaseActivity
 ```
 
-**控制中心**场景是按 iOS 26 控制中心截图逐像素量出来的复刻（主页，以及点网络模块展开的二级页），
-背景用同一张壁纸，方便和真机并排只比玻璃本身。这个场景会藏起 demo 控件和系统栏，点右上角的电源图标切回。
+**控制中心**场景是按 iOS 26 控制中心截图逐像素量出来的复刻：从桌面往下拉开、往上滑收起，点网络模块展开二级页，
+滑杆能拖、按钮能切换，方便和真机并排只比玻璃本身。这个场景会藏起 demo 控件和系统栏，点右上角的电源图标切回。
 
 ```bash
 adb shell am start -n com.example.liquidglass/com.example.liquidglass.ProfessionalDemoActivity --es scene control_center

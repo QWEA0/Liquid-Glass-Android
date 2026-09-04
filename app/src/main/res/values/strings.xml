@@ -177,7 +177,7 @@
     <string name="scene_merge">Merge</string>
     <string name="scene_home">Home</string>
     <string name="scene_control_center">Control Center</string>
-    <string name="cc_hint">Tap the connectivity tile to expand it. Tap the power icon to show the demo controls.</string>
+    <string name="cc_hint">Pull down to open Control Center, swipe up to close it. Tap the power icon for the demo controls.</string>
     <string name="scene_list">List</string>
     <string name="scene_text">Text</string>
     <string name="text_scene_hint">Type anything — it becomes glass</string>

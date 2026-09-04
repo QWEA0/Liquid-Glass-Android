@@ -177,7 +177,7 @@
     <string name="scene_merge">融合</string>
     <string name="scene_home">桌面</string>
     <string name="scene_control_center">控制中心</string>
-    <string name="cc_hint">点网络模块展开二级页；点右上角电源图标显示 demo 控件</string>
+    <string name="cc_hint">从上往下拉开控制中心，往上滑收起；点右上角电源图标显示 demo 控件</string>
     <string name="scene_list">列表</string>
     <string name="scene_text">文字</string>
     <string name="text_scene_hint">输入文字，实时变成玻璃</string>

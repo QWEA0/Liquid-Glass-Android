@@ -11,6 +11,8 @@
 package com.example.liquidglass
 
 import android.Manifest
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -43,6 +45,8 @@ import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.ViewConfiguration
+import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
@@ -68,6 +72,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.abs
 
 class ProfessionalDemoActivity : AppCompatActivity() {
 
@@ -115,6 +120,12 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         var cellular = true
         var bluetooth = true
         var hotspot = false
+        var rotationLock = true
+        var flashlight = false
+        var record = false
+        var focus = false
+        var brightness = 0.34f
+        var volume = 0f
     }
 
     private val ccState = ControlCenterState()
@@ -127,6 +138,12 @@ class ProfessionalDemoActivity : AppCompatActivity() {
 
     /** 控制中心场景的背景：桌面截图整屏模糊后的位图，跨页复用 */
     private var controlCenterBackdrop: Bitmap? = null
+
+    /** 控制中心关着时看到的清晰桌面 */
+    private var controlCenterHome: Bitmap? = null
+
+    /** 控制中心是否拉开着：切页重建时保持，收起时回到主页 */
+    private var controlCenterOpen = false
 
     // ==================== 视图 ====================
 
@@ -198,6 +215,8 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         const val CC_SUBTITLE = 0x99FFFFFF.toInt()
         const val CC_CONTROL_DIM = 0x4DFFFFFF     // 上一曲 / 下一曲
         const val CC_RAIL_DIM = 0x66FFFFFF        // 右侧页面指示的非当前页
+        const val CC_INDIGO = 0xFF5E5CE6.toInt()  // 专注模式激活
+        const val CC_ON_WHITE = 0xFF3A3A3C.toInt() // 白底上的图标
 
         private const val TAG = "ProfessionalDemo"
         private const val PREF_NAME = "LiquidGlassPrefs"
@@ -1320,7 +1339,11 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     /**
      * 场景：iOS 控制中心对照 —— 用同一张 iOS 26 桌面截图做背景，模块的位置、尺寸、颜色和
      * 文字都按真机截图逐像素量出来摆，图标照 SF Symbols 的样子手绘成矢量图，
-     * 好和 iOS 截图并排比玻璃本身的差距。两页：主页；点网络模块展开的二级页，点空白处收回。
+     * 好和 iOS 截图并排比玻璃本身的差距。
+     *
+     * 手势照 iOS：初始是清晰的桌面，从上往下拉，背景渐渐模糊压暗、模块从上方滑入，松手按
+     * 进度和速度弹开或回弹；打开后往上滑收起。点网络模块的空白处展开二级页，点二级页的
+     * 空白处收回。亮度 / 音量能拖，方向锁、手电、录屏、专注和网络开关都能切换。
      *
      * 控制中心的底子是"整屏模糊 + 压暗"，玻璃再在上面采样。背景用库的 CPU 模糊做一次
      * 存成位图，不用 RenderEffect：每块玻璃采样父容器时都会把整屏模糊重跑一遍。
@@ -1331,17 +1354,30 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     private fun buildControlCenterScene(): View {
         val matchParent = FrameLayout.LayoutParams.MATCH_PARENT
         val wrapContent = FrameLayout.LayoutParams.WRAP_CONTENT
-        val stage = FrameLayout(this)
+        val stage = ControlCenterStage(this)
+        fun full() = FrameLayout.LayoutParams(matchParent, matchParent)
 
+        val home = controlCenterHome
+            ?: BitmapFactory.decodeResource(resources, R.drawable.ios_control_center_bg).also { controlCenterHome = it }
         val backdrop = controlCenterBackdrop
             ?: buildControlCenterBackdrop().also { controlCenterBackdrop = it }
-        stage.addView(ImageView(this).apply {
+        // 清晰的桌面（关着时看到的），上面盖模糊版和压暗层，透明度跟下拉进度走
+        val homeView = ImageView(this).apply {
+            setImageBitmap(home)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+        }
+        stage.addView(homeView, full())
+        val blurView = ImageView(this).apply {
             setImageBitmap(backdrop)
             scaleType = ImageView.ScaleType.CENTER_CROP
-        }, FrameLayout.LayoutParams(matchParent, matchParent))
-        // 压暗层：控制中心把桌面压到近黑
-        stage.addView(View(this).apply { setBackgroundColor(CC_SCRIM) },
-            FrameLayout.LayoutParams(matchParent, matchParent))
+            alpha = 0f
+        }
+        stage.addView(blurView, full())
+        val scrim = View(this).apply {
+            setBackgroundColor(CC_SCRIM)
+            alpha = 0f
+        }
+        stage.addView(scrim, full())
 
         val scale = resources.displayMetrics.widthPixels / 430f
         fun px(v: Float): Int = Math.round(v * scale)
@@ -1355,8 +1391,15 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         val state = ccState
         var firstGlass: LiquidGlassView? = null
 
-        // 玻璃模块：底子已经模糊过，玻璃自己再糊一层把内部抹匀（iOS 的模块内部几乎看不出
-        // 背景的起伏）；磨砂的发白用 glassTint 的白色散射做；边带按模块尺寸给，折射取斜面一半
+        // 控制中心图层：直接挂在舞台上的视图都算，随下拉进度平移、淡入
+        val panel = ArrayList<View>()
+        fun place(parent: ViewGroup, v: View, params: ViewGroup.LayoutParams) {
+            parent.addView(v, params)
+            if (parent === stage) panel += v
+        }
+
+        // 玻璃模块：底子已经模糊过，玻璃自己再糊一层；磨砂的发白用 glassTint 的白色散射做；
+        // 边带按模块尺寸给，折射取斜面一半
         fun glass(x: Float, y: Float, w: Float, h: Float, radiusPt: Float, bevelPt: Float = 14f): LiquidGlassView {
             val v = LiquidGlassView(this).apply {
                 enableDynamicBackground = true
@@ -1372,7 +1415,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 edgeHighlightOpacity = 80f
                 glassTint = CC_FROST
             }
-            stage.addView(v, lp(x, y, w, h))
+            place(stage, v, lp(x, y, w, h))
             extraGlassViews += v
             if (firstGlass == null) firstGlass = v
             return v
@@ -1383,19 +1426,18 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 imageTintList = tint?.let { ColorStateList.valueOf(it) }
                 scaleType = ImageView.ScaleType.FIT_XY
             }
-            parent.addView(v, lp(x, y, w, h))
+            place(parent, v, lp(x, y, w, h))
             return v
         }
         fun iconAt(parent: ViewGroup, res: Int, cx: Float, cy: Float, w: Float, h: Float, tint: Int? = white) =
             icon(parent, res, cx - w / 2f, cy - h / 2f, w, h, tint)
+        fun oval(color: Int) = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(color)
+        }
         fun circle(parent: ViewGroup, x: Float, y: Float, size: Float, color: Int): FrameLayout {
-            val v = FrameLayout(this).apply {
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(color)
-                }
-            }
-            parent.addView(v, lp(x, y, size, size))
+            val v = FrameLayout(this).apply { background = oval(color) }
+            place(parent, v, lp(x, y, size, size))
             return v
         }
         fun makeText(text: String, sizePt: Float, color: Int, bold: Boolean) = TextView(this).apply {
@@ -1405,10 +1447,15 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             typeface = if (bold) Typeface.create("sans-serif-medium", Typeface.NORMAL) else Typeface.SANS_SERIF
             includeFontPadding = false
         }
+        fun smallIcon(res: Int, tint: Int) = ImageView(this).apply {
+            setImageResource(res)
+            imageTintList = ColorStateList.valueOf(tint)
+            scaleType = ImageView.ScaleType.FIT_XY
+        }
         // 按大写字母顶边定位：Roboto 关掉 includeFontPadding 后，视图顶到大写顶边差 0.217em
         fun textCapTop(parent: ViewGroup, text: String, x: Float, capTop: Float, sizePt: Float, color: Int, bold: Boolean = false): TextView {
             val v = makeText(text, sizePt, color, bold)
-            parent.addView(v, FrameLayout.LayoutParams(wrapContent, wrapContent).apply {
+            place(parent, v, FrameLayout.LayoutParams(wrapContent, wrapContent).apply {
                 leftMargin = px(x)
                 topMargin = px(capTop - sizePt * 0.217f)
             })
@@ -1422,14 +1469,11 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 gravity = Gravity.CENTER_VERTICAL
                 addView(tv, LinearLayout.LayoutParams(wrapContent, wrapContent))
                 if (chevron) {
-                    addView(ImageView(this@ProfessionalDemoActivity).apply {
-                        setImageResource(R.drawable.ic_cc_chevron_updown)
-                        imageTintList = ColorStateList.valueOf(color)
-                        scaleType = ImageView.ScaleType.FIT_XY
-                    }, LinearLayout.LayoutParams(px(8f), px(12f)).apply { marginStart = px(5.5f) })
+                    addView(smallIcon(R.drawable.ic_cc_chevron_updown, color),
+                        LinearLayout.LayoutParams(px(8f), px(12f)).apply { marginStart = px(5.5f) })
                 }
             }
-            parent.addView(row, FrameLayout.LayoutParams(wrapContent, wrapContent).apply {
+            place(parent, row, FrameLayout.LayoutParams(wrapContent, wrapContent).apply {
                 leftMargin = px(x)
                 topMargin = px(capTop - 13f * 0.217f)
             })
@@ -1449,6 +1493,24 @@ class ProfessionalDemoActivity : AppCompatActivity() {
             apply()
             c.setOnClickListener { set(!get()); apply() }
         }
+        // 可切换的圆形玻璃按钮：激活态整圆填色（方向锁 / 手电是白，录屏是红），图标换色
+        fun toggleCircle(
+            x: Float, y: Float, res: Int, iw: Float, ih: Float, activeBg: Int, activeIcon: Int,
+            get: () -> Boolean, set: (Boolean) -> Unit
+        ): LiquidGlassView {
+            val g = glass(x, y, 72f, 72f, 36f, 12f)
+            val fillView = View(this).apply { background = oval(activeBg) }
+            g.addView(fillView, full())
+            val iv = iconAt(g, res, 36f, 36f, iw, ih)
+            fun apply() {
+                val on = get()
+                fillView.visibility = if (on) View.VISIBLE else View.INVISIBLE
+                iv.imageTintList = ColorStateList.valueOf(if (on) activeIcon else white)
+            }
+            apply()
+            g.setOnClickListener { set(!get()); apply() }
+            return g
+        }
         // 子视图裁到圆角内（滑杆的填充）
         fun clipRounded(v: View, radiusPt: Float) {
             v.outlineProvider = object : ViewOutlineProvider() {
@@ -1457,6 +1519,43 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 }
             }
             v.clipToOutline = true
+        }
+        // 能拖的滑杆：白色填充从底部升起；拖动时不让舞台把手势抢去做下拉
+        fun slider(
+            x: Float, y: Float, res: Int, iw: Float, ih: Float, iconTint: Int, iconTintOnFill: Int,
+            get: () -> Float, set: (Float) -> Unit
+        ): LiquidGlassView {
+            val g = glass(x, y, 72f, 160f, 36f, 12f)
+            clipRounded(g, 36f)
+            val fill = View(this).apply {
+                setBackgroundColor(0xFBFFFFFF.toInt())
+                pivotY = px(160f).toFloat()
+            }
+            g.addView(fill, FrameLayout.LayoutParams(matchParent, px(160f)))
+            val iv = iconAt(g, res, 36.5f, 125f, iw, ih, iconTint)
+            fun apply() {
+                val f = get()
+                fill.scaleY = f
+                // 填充盖过图标时图标换色
+                iv.imageTintList = ColorStateList.valueOf(if (f > 0.3f) iconTintOnFill else iconTint)
+            }
+            apply()
+            g.setOnTouchListener { v, ev ->
+                when (ev.actionMasked) {
+                    MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                        v.parent.requestDisallowInterceptTouchEvent(true)
+                        set((1f - ev.y / v.height).coerceIn(0f, 1f))
+                        apply()
+                        true
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        v.parent.requestDisallowInterceptTouchEvent(false)
+                        true
+                    }
+                    else -> false
+                }
+            }
+            return g
         }
 
         when (controlCenterPage) {
@@ -1469,33 +1568,22 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                     setOnClickListener { toggleControlCenterChrome() }
                 }
                 // 状态行：信号点 + No Service + Wi-Fi；方向锁 + 100% + 充电电池
-                stage.addView(LinearLayout(this).apply {
+                place(stage, LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    addView(ImageView(this@ProfessionalDemoActivity).apply {
-                        setImageResource(R.drawable.ic_cc_signal_dots)
-                        imageTintList = ColorStateList.valueOf(0x66FFFFFF)
-                        scaleType = ImageView.ScaleType.FIT_XY
-                    }, LinearLayout.LayoutParams(px(22f), px(3.5f)))
+                    addView(smallIcon(R.drawable.ic_cc_signal_dots, 0x66FFFFFF), LinearLayout.LayoutParams(px(22f), px(3.5f)))
                     addView(makeText("No Service", 17f, white, bold = true),
                         LinearLayout.LayoutParams(wrapContent, wrapContent).apply { marginStart = px(5.7f) })
-                    addView(ImageView(this@ProfessionalDemoActivity).apply {
-                        setImageResource(R.drawable.ic_cc_wifi)
-                        imageTintList = ColorStateList.valueOf(white)
-                        scaleType = ImageView.ScaleType.FIT_XY
-                    }, LinearLayout.LayoutParams(px(17f), px(12f)).apply { marginStart = px(5f) })
+                    addView(smallIcon(R.drawable.ic_cc_wifi, white),
+                        LinearLayout.LayoutParams(px(17f), px(12f)).apply { marginStart = px(5f) })
                 }, FrameLayout.LayoutParams(wrapContent, px(20f)).apply {
                     leftMargin = px(53f)
                     topMargin = px(82.5f)
                 })
-                stage.addView(LinearLayout(this).apply {
+                place(stage, LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    addView(ImageView(this@ProfessionalDemoActivity).apply {
-                        setImageResource(R.drawable.ic_cc_lock_rotation)
-                        imageTintList = ColorStateList.valueOf(white)
-                        scaleType = ImageView.ScaleType.FIT_XY
-                    }, LinearLayout.LayoutParams(px(15f), px(13.8f)))
+                    addView(smallIcon(R.drawable.ic_cc_lock_rotation, white), LinearLayout.LayoutParams(px(15f), px(13.8f)))
                     addView(makeText("100%", 17f, white, bold = true),
                         LinearLayout.LayoutParams(wrapContent, wrapContent).apply { marginStart = px(3.5f) })
                     addView(ImageView(this@ProfessionalDemoActivity).apply {
@@ -1548,36 +1636,31 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                     iconAt(t, R.drawable.ic_cc_forward, 126f, 136f, 24f, 14f, CC_CONTROL_DIM)
                 }
                 // 第二行：方向锁（激活：白底红图标）、屏幕镜像、亮度、音量
-                circle(stage, 46.5f, 313.5f, 72f, 0xF7FFFFFF.toInt()).also {
-                    iconAt(it, R.drawable.ic_cc_lock_rotation, 37f, 36f, 38f, 34.8f, CC_RED)
-                }
+                toggleCircle(46.5f, 313.5f, R.drawable.ic_cc_lock_rotation, 38f, 34.8f, 0xF7FFFFFF.toInt(), CC_RED,
+                    { state.rotationLock }, { state.rotationLock = it })
                 glass(134.7f, 313.5f, 72f, 72f, 36f, 12f).also {
                     iconAt(it, R.drawable.ic_cc_mirror, 36f, 36f, 34f, 30f)
                 }
-                glass(223f, 313.5f, 72f, 160f, 36f, 12f).also { t ->
-                    clipRounded(t, 36f)
-                    t.addView(View(this).apply { setBackgroundColor(0xFBFFFFFF.toInt()) },
-                        FrameLayout.LayoutParams(matchParent, px(55f), Gravity.BOTTOM))
-                    iconAt(t, R.drawable.ic_cc_sun, 36.2f, 124.7f, 27.3f, 27.3f, CC_YELLOW)
-                }
-                glass(311.3f, 313.5f, 72f, 160f, 36f, 12f).also {
-                    iconAt(it, R.drawable.ic_cc_speaker_slash, 37.5f, 125.5f, 22.7f, 25f)
-                }
-                // 专注模式
+                slider(223f, 313.5f, R.drawable.ic_cc_sun, 27.3f, 27.3f, white, CC_YELLOW,
+                    { state.brightness }, { state.brightness = it })
+                slider(311.3f, 313.5f, R.drawable.ic_cc_speaker_slash, 22.7f, 25f, white, CC_ON_WHITE,
+                    { state.volume }, { state.volume = it })
+                // 专注模式：点月亮切换
                 glass(46.5f, 402f, 160f, 72f, 36f, 12f).also { t ->
-                    circle(t, 14.5f, 14.5f, 43f, CC_MOON_CIRCLE).also {
-                        iconAt(it, R.drawable.ic_cc_moon, 21.5f, 21.5f, 21f, 21f)
+                    val moon = circle(t, 14.5f, 14.5f, 43f, CC_MOON_CIRCLE)
+                    iconAt(moon, R.drawable.ic_cc_moon, 21.5f, 21.5f, 21f, 21f)
+                    fun applyFocus() {
+                        (moon.background as GradientDrawable).setColor(if (state.focus) CC_INDIGO else CC_MOON_CIRCLE)
                     }
+                    applyFocus()
+                    moon.setOnClickListener { state.focus = !state.focus; applyFocus() }
                     t.addView(LinearLayout(this).apply {
                         orientation = LinearLayout.HORIZONTAL
                         gravity = Gravity.CENTER_VERTICAL
                         addView(makeText("Focus", 15f, white, bold = true),
                             LinearLayout.LayoutParams(wrapContent, wrapContent))
-                        addView(ImageView(this@ProfessionalDemoActivity).apply {
-                            setImageResource(R.drawable.ic_cc_chevron_updown)
-                            imageTintList = ColorStateList.valueOf(CC_SUBTITLE)
-                            scaleType = ImageView.ScaleType.FIT_XY
-                        }, LinearLayout.LayoutParams(px(8f), px(12f)).apply { marginStart = px(5.5f) })
+                        addView(smallIcon(R.drawable.ic_cc_chevron_updown, CC_SUBTITLE),
+                            LinearLayout.LayoutParams(px(8f), px(12f)).apply { marginStart = px(5.5f) })
                     }, FrameLayout.LayoutParams(wrapContent, px(72f)).apply { leftMargin = px(67.5f) })
                 }
                 // 右侧页面指示
@@ -1587,12 +1670,14 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 // 第四、五行圆形玻璃按钮
                 fun glassCircle(x: Float, y: Float, res: Int, w: Float, h: Float) =
                     glass(x, y, 72f, 72f, 36f, 12f).also { iconAt(it, res, 36f, 36f, w, h) }
-                glassCircle(46.5f, 490f, R.drawable.ic_cc_flashlight, 13f, 33f)
+                toggleCircle(46.5f, 490f, R.drawable.ic_cc_flashlight, 13f, 33f, 0xF7FFFFFF.toInt(), CC_ON_WHITE,
+                    { state.flashlight }, { state.flashlight = it })
                 glassCircle(134.7f, 490f, R.drawable.ic_cc_timer, 34f, 34f)
                 glassCircle(223f, 490f, R.drawable.ic_cc_calculator, 26.3f, 37.7f)
                 glassCircle(311.3f, 490f, R.drawable.ic_cc_camera, 37f, 27f)
                 glassCircle(46.5f, 578.5f, R.drawable.ic_cc_qr, 33f, 33f)
-                glassCircle(134.7f, 578.5f, R.drawable.ic_cc_record, 33f, 33f)
+                toggleCircle(134.7f, 578.5f, R.drawable.ic_cc_record, 33f, 33f, CC_RED, white,
+                    { state.record }, { state.record = it })
             }
             ControlCenterPage.CONNECTIVITY -> {
                 // 点模块外的空白处收回主页
@@ -1649,6 +1734,36 @@ class ProfessionalDemoActivity : AppCompatActivity() {
                 }
             }
         }
+
+        // 下拉进度 → 画面：背景由清晰渐变到模糊压暗并微微放大，模块从屏幕上边缘外滑到位并淡入，
+        // 越靠下的模块走得越远，像整张纸被拉下来
+        stage.onProgress = { p ->
+            blurView.alpha = p
+            scrim.alpha = p
+            val s = 1f + 0.05f * p
+            homeView.scaleX = s
+            homeView.scaleY = s
+            blurView.scaleX = s
+            blurView.scaleY = s
+            val fade = (p * 1.6f).coerceAtMost(1f)
+            for (v in panel) {
+                v.visibility = if (p > 0f) View.VISIBLE else View.INVISIBLE
+                v.alpha = fade
+                v.translationY = -(1f - p) * (v.bottom + px(24f))
+            }
+        }
+        // 落定：记住开合状态；在二级页收起时回到主页
+        stage.onSettled = { open ->
+            controlCenterOpen = open
+            if (!open && controlCenterPage != ControlCenterPage.MAIN) {
+                controlCenterPage = ControlCenterPage.MAIN
+                showScene(Scene.CONTROL_CENTER)
+            }
+        }
+        // 位移按各模块的布局位置算，布局完成后再应用一次
+        stage.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> stage.applyProgress() }
+        stage.setProgressNow(if (controlCenterOpen) 1f else 0f)
+
         statsSource = firstGlass
         return stage
     }
@@ -1678,6 +1793,132 @@ class ProfessionalDemoActivity : AppCompatActivity() {
     private fun toggleControlCenterChrome() {
         controlCenterChromeShown = !controlCenterChromeShown
         setDemoChromeVisible(controlCenterChromeShown)
+    }
+
+    /**
+     * 控制中心场景的舞台：处理 iOS 那套"下拉打开 / 上滑收起"手势。
+     * 竖向拖动超过 touch slop 就从子视图手里接管（子视图要自己拖的，如滑杆，调
+     * requestDisallowInterceptTouchEvent 即可）；进度 0..1 由 [onProgress] 映射成画面，
+     * 松手按进度和速度决定弹开还是回弹，落定后回调 [onSettled]。
+     */
+    private class ControlCenterStage(context: Context) : FrameLayout(context) {
+        var progress = 0f
+            private set
+        var onProgress: (Float) -> Unit = {}
+        var onSettled: (Boolean) -> Unit = {}
+
+        private val slop = ViewConfiguration.get(context).scaledTouchSlop
+        private var downX = 0f
+        private var downY = 0f
+        private var dragOriginY = 0f
+        private var dragging = false
+        private var startProgress = 0f
+        private var animator: ValueAnimator? = null
+        private var velocity: VelocityTracker? = null
+
+        /** 拉满需要的手指行程 */
+        private val range: Float get() = height * 0.4f
+
+        fun setProgressNow(p: Float) {
+            progress = p.coerceIn(0f, 1f)
+            onProgress(progress)
+        }
+
+        fun applyProgress() = onProgress(progress)
+
+        override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> beginTouch(ev)
+                MotionEvent.ACTION_MOVE -> {
+                    velocity?.addMovement(ev)
+                    if (shouldStartDrag(ev)) return true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> endTracking()
+            }
+            return false
+        }
+
+        override fun onTouchEvent(ev: MotionEvent): Boolean {
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    beginTouch(ev)
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    velocity?.addMovement(ev)
+                    if (!dragging) shouldStartDrag(ev)
+                    if (dragging) setProgressNow(startProgress + (ev.y - dragOriginY) / range)
+                    return true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (dragging) {
+                        val vy = velocity?.let { it.computeCurrentVelocity(1000); it.yVelocity } ?: 0f
+                        settle(vy)
+                    } else if (ev.actionMasked == MotionEvent.ACTION_UP) {
+                        performClick()
+                    }
+                    endTracking()
+                    return true
+                }
+            }
+            return super.onTouchEvent(ev)
+        }
+
+        override fun performClick(): Boolean = super.performClick()
+
+        private fun beginTouch(ev: MotionEvent) {
+            animator?.cancel()
+            downX = ev.x
+            downY = ev.y
+            dragging = false
+            velocity?.recycle()
+            velocity = VelocityTracker.obtain().also { it.addMovement(ev) }
+        }
+
+        /** 竖向位移过了 slop 且大于横向就开始拖；关着时只认下拉，开着时只认上滑 */
+        private fun shouldStartDrag(ev: MotionEvent): Boolean {
+            if (dragging) return true
+            val dy = ev.y - downY
+            val dx = ev.x - downX
+            if (abs(dy) < slop || abs(dy) < abs(dx)) return false
+            if (progress <= 0f && dy < 0f) return false
+            if (progress >= 1f && dy > 0f) return false
+            dragging = true
+            startProgress = progress
+            dragOriginY = ev.y
+            return true
+        }
+
+        private fun endTracking() {
+            velocity?.recycle()
+            velocity = null
+        }
+
+        /** 松手：甩得快按方向，否则按进度过没过 40% */
+        private fun settle(vy: Float) {
+            val open = if (abs(vy) > 600f) vy > 0f else progress > 0.4f
+            animateTo(if (open) 1f else 0f)
+        }
+
+        private fun animateTo(target: Float) {
+            animator?.cancel()
+            var cancelled = false
+            animator = ValueAnimator.ofFloat(progress, target).apply {
+                duration = (180f + 260f * abs(target - progress)).toLong()
+                interpolator = DecelerateInterpolator(2f)
+                addUpdateListener { setProgressNow(it.animatedValue as Float) }
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationCancel(animation: Animator) {
+                        cancelled = true
+                    }
+
+                    override fun onAnimationEnd(animation: Animator) {
+                        if (!cancelled) onSettled(target >= 1f)
+                    }
+                })
+                start()
+            }
+        }
     }
 
     /**
@@ -3161,6 +3402,8 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         scenicBitmap = null
         controlCenterBackdrop?.recycle()
         controlCenterBackdrop = null
+        controlCenterHome?.recycle()
+        controlCenterHome = null
     }
 
     @Deprecated("Deprecated in Java")
