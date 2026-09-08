@@ -280,6 +280,8 @@ pipeline; below API 33 they are accepted and silently ignored — no exception i
 | `aberrationIntensity` | Float | `2f` | — | Classic RGB-separation strength |
 | `displacementScale` | Float | `70f` | — | Classic edge distortion |
 | `elasticity` | Float | `0.15f` | — | Touch spring response |
+| `enablePressEffect` | Boolean | `true` | — | Press feedback: scale to `pressScale`, elastic stretch while dragging, lens press deformation (API 33+) |
+| `pressScale` | Float | `0.95f` | 0.5–1.5 | Scale while pressed. Below 1 shrinks, above 1 grows like iOS 26 interactive glass. Uses the View transform, so it may overflow the layout bounds; set `clipChildren="false"` on the parent if the glass touches the parent's edge |
 | `blurMethod` | `BlurMethod` | `SMART` | — | See enum table below |
 | `enableBackdropBlur` | Boolean | `true` | — | |
 | `enableChromaticAberration` | Boolean | `true` | — | Classic pipeline |
@@ -742,6 +744,8 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 | `aberrationIntensity` | Float | `2f` | — | 经典 RGB 分离强度 |
 | `displacementScale` | Float | `70f` | — | 经典边缘畸变 |
 | `elasticity` | Float | `0.15f` | — | 触摸弹性响应 |
+| `enablePressEffect` | Boolean | `true` | — | 按压反馈：缩放到 `pressScale`、拖拽弹性拉伸、透镜按压形变（API 33+） |
+| `pressScale` | Float | `0.95f` | 0.5–1.5 | 按住时的缩放。小于 1 缩小，大于 1 像 iOS 26 交互玻璃那样放大。走 View 变换，可以溢出自身布局边界；玻璃贴着父容器边缘时给父容器设 `clipChildren="false"` |
 | `blurMethod` | `BlurMethod` | `SMART` | — | 合法值见下表 |
 | `enableBackdropBlur` | Boolean | `true` | — | |
 | `enableChromaticAberration` | Boolean | `true` | — | 经典管线 |

@@ -73,6 +73,7 @@ import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 class ProfessionalDemoActivity : AppCompatActivity() {
 
@@ -2760,10 +2761,10 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         addSwitchRow(interactionCard, getString(R.string.switch_press_effect), glassView.enablePressEffect) { checked ->
             applyGlass { it.enablePressEffect = checked }
         }
-        // 按压缩放 1.00 - 0.80（进度 0 = 不缩放）
-        addSlider(interactionCard, 20, ((1f - glassView.pressScale) * 100).toInt(),
-            { getString(R.string.press_scale_value, 1f - it / 100f) }) { p ->
-            applyGlass { it.pressScale = 1f - p / 100f }
+        // 按压缩放 0.80 - 1.20（< 1 按下缩小，> 1 按下放大）
+        addSlider(interactionCard, 40, ((glassView.pressScale - 0.8f) * 100f).roundToInt(),
+            { getString(R.string.press_scale_value, 0.8f + it / 100f) }) { p ->
+            applyGlass { it.pressScale = 0.8f + p / 100f }
         }
         // 弹性系数 0 - 0.50（拖拽时的拉伸强度）
         addSlider(interactionCard, 50, (glassView.elasticity * 100).toInt(),

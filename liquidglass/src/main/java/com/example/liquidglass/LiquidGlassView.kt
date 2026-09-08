@@ -282,10 +282,14 @@ open class LiquidGlassView @JvmOverloads constructor(
     /** 点击/按压效果开关（按压缩放 + 拖拽弹性拉伸 + 透镜按压形变） */
     var enablePressEffect = true
 
-    /** 按压时的缩放目标（1 = 按下不缩放） */
+    /**
+     * 按压时的缩放目标（0.5–1.5）：< 1 按下缩小，> 1 按下放大（iOS 26 交互玻璃的手感），
+     * 1 = 按下不缩放。缩放走 View 变换属性，可以溢出自身布局边界；玻璃贴着父容器
+     * 边缘且放大时，父容器要设 clipChildren = false 才不会被切
+     */
     var pressScale = 0.95f
         set(value) {
-            field = value.coerceIn(0.5f, 1f)
+            field = value.coerceIn(0.5f, 1.5f)
         }
 
     private var cornerTL = 999f
