@@ -20,9 +20,7 @@ enum class GlassMaterial(
     /** 无自适应时的基础染色（straight-alpha ARGB） */
     val baseTint: Int,
     /** 镜面高光强度缩放 */
-    val specBoost: Float,
-    /** 内阴影强度（0-1） */
-    val innerShadow: Float
+    val specBoost: Float
 ) {
     /** 常规材质：强模糊 + 自适应染色，重可读性 */
     REGULAR(
@@ -30,8 +28,7 @@ enum class GlassMaterial(
         dimAmount = 0.0f,
         adaptiveTint = true,
         baseTint = 0x24FFFFFF,
-        specBoost = 1.0f,
-        innerShadow = 0.55f
+        specBoost = 1.0f
     ),
 
     /** 高透材质：弱模糊 + 固定压暗层，重下层内容 */
@@ -40,7 +37,6 @@ enum class GlassMaterial(
         dimAmount = 0.16f,
         adaptiveTint = false,
         baseTint = 0x14FFFFFF,
-        specBoost = 1.2f,
-        innerShadow = 0.35f
+        specBoost = 1.2f
     )
 }

@@ -198,7 +198,7 @@
     <string name="render_lens">透镜 2.0</string>
     <string name="render_classic_gpu">经典 GPU</string>
     <string name="section_lens">Liquid Glass 2.0 · 透镜（API 33+）</string>
-    <string name="lens_note">单 pass AGSL 透镜：真实 SDF 折射、边缘色散、法线驱动镜面高光（重力传感器光源）、内阴影、亮度自适应染色与液态融合。API 33 以下自动回退。</string>
+    <string name="lens_note">单 pass AGSL 透镜：真实 SDF 折射、边缘色散、法线驱动的两道对称边缘亮线（重力传感器光源）、亮度自适应染色与液态融合。API 33 以下自动回退。</string>
     <string name="lens_material">材质</string>
     <string name="material_regular">常规</string>
     <string name="material_clear">高透</string>

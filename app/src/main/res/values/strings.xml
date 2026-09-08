@@ -198,7 +198,7 @@
     <string name="render_lens">Lens 2.0</string>
     <string name="render_classic_gpu">Classic GPU</string>
     <string name="section_lens">Liquid Glass 2.0 · Lens (API 33+)</string>
-    <string name="lens_note">Single-pass AGSL lens: real SDF refraction, edge dispersion, normal-driven specular (gravity-sensor light), inner shadow, adaptive tint and liquid merge. Falls back automatically below API 33.</string>
+    <string name="lens_note">Single-pass AGSL lens: real SDF refraction, edge dispersion, normal-driven rim light (two symmetric lobes, gravity-sensor light), adaptive tint and liquid merge. Falls back automatically below API 33.</string>
     <string name="lens_material">Material</string>
     <string name="material_regular">Regular</string>
     <string name="material_clear">Clear</string>

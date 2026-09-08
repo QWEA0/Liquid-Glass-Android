@@ -265,7 +265,7 @@ pipeline; below API 33 they are accepted and silently ignored — no exception i
 | `bevelWidth` | Float | `48f` | 2–200 px | **33+** Width of the edge "thickness" band — refraction and highlight both live in it |
 | `refractionFalloff` | Float | `2f` | 0–4 | **33+** Inverse-power (gravitational-lens) falloff exponent: displacement ∝ (1 + x/k)^-p with k = `bevelWidth / 4`, reaching 0 at the band's end. The closer to the rim the harder the bend — at p = 2 only a quarter is left one k in, so the fold packs into a thin dense ring at the very edge and the interior keeps a faint magnification tail. Higher = thinner ring. `0` = the old square-bevel profile, bending spread evenly across the band |
 | `refractionNoFold` | Boolean | `false` | — | **33+** `true` caps the displacement where the profile stays monotonic (`bevelWidth / 2` for the square bevel, less for inverse power): content near the rim is only stretched to the edge. Default `false` lets the sampling fold back, which is what draws the compressed mirror ring at the rim |
-| `adaptiveLensScale` | Boolean | `true` | — | **33+** Caps `bevelWidth`, `refractionHeight` and the rim-highlight / inner-shadow bands by the shape's short side (refraction falls off quadratically below 110dp: a 48dp button gets ~38px), so small controls are not all edge band. Shapes of 110dp and up are unaffected at the defaults |
+| `adaptiveLensScale` | Boolean | `true` | — | **33+** Caps `bevelWidth`, `refractionHeight` and the rim-highlight band by the shape's short side (refraction falls off quadratically below 110dp: a 48dp button gets ~38px), so small controls are not all edge band. Shapes of 110dp and up are unaffected at the defaults |
 | `refractionOutward` | Boolean | `false` | — | **33+** Optional convex-lens mode. `false` (default, matches iOS) samples inward: the rim is a compressed mirror of the interior. `true` samples **outward**: content just outside the shape is bent into the rim before it passes under the glass, and content under the glass stretches along the edge |
 | `dispersionStrength` | Float | `0.10f` | 0–1 | **33+** Rim spectral fringe. Above ~0.25 reads as rainbow |
 | `enableSensorHighlight` | Boolean | `false` | — | **33+** Specular follows device tilt (gravity sensor) |
@@ -434,7 +434,7 @@ multi-module form `com.github.QWEA0.Liquid-Glass-Android:liquidglass` does **not
 
 **Core Components:**
 - `LiquidGlassView` - Main view component with touch interaction
-- `GlassLensRenderer` - Single-pass AGSL lens pipeline: SDF refraction, dispersion, normal-lit specular, inner shadow, smin merge (API 33+)
+- `GlassLensRenderer` - Single-pass AGSL lens pipeline: SDF refraction, dispersion, normal-lit two-lobe rim light, smin merge (API 33+)
 - `GlassRuntimeEffects` - AGSL color filter / blend modes: vibrancy saturation, fused rim highlight, per-pixel adaptive tint (API 36+, auto fallback)
 - `LightSourceController` - Gravity-sensor world-fixed light source for specular highlights
 - `BackdropLuminanceMeter` - Backdrop brightness sampling for adaptive tint
@@ -729,7 +729,7 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 | `bevelWidth` | Float | `48f` | 2–200 px | **33+** 边缘"厚度"带宽度，折射和高光都落在这一圈里 |
 | `refractionFalloff` | Float | `2f` | 0–4 | **33+** 引力透镜式逆幂衰减指数：位移 ∝ (1 + x/k)^-p，k = `bevelWidth / 4`，带末端归零。越贴边弯折越剧烈——p = 2 时离边 k 处只剩 1/4，折返压成贴边一圈细而密的压缩环，内侧只留轻微放大的尾巴；指数越大环越细。`0` = 旧的平方斜面剖面，弯折沿整条带均匀铺开 |
 | `refractionNoFold` | Boolean | `false` | — | **33+** `true` 把位移钳在剖面单调的上限以内（平方斜面为 `bevelWidth / 2`，逆幂剖面更小）：边缘附近的内容只被拉伸到边上。默认 `false` 允许采样折返，贴边那圈压缩镜像环就来自这里 |
-| `adaptiveLensScale` | Boolean | `true` | — | **33+** 按形状短边钳 `bevelWidth`、`refractionHeight` 和高光 / 内阴影带宽度（折射在 110dp 以下按平方收，48dp 的按钮约 38px），小控件不再整块都是边缘带；短边 110dp 以上的面板在默认值下不受影响 |
+| `adaptiveLensScale` | Boolean | `true` | — | **33+** 按形状短边钳 `bevelWidth`、`refractionHeight` 和高光带宽度（折射在 110dp 以下按平方收，48dp 的按钮约 38px），小控件不再整块都是边缘带；短边 110dp 以上的面板在默认值下不受影响 |
 | `refractionOutward` | Boolean | `false` | — | **33+** 可选的凸透镜模式。`false`（默认，与 iOS 一致）向内采样，边缘是内侧内容的压缩镜像；`true` **向外**采样，形状外的内容还没进到玻璃下面就先被弯进边缘，进来之后沿边缘延展 |
 | `dispersionStrength` | Float | `0.10f` | 0–1 | **33+** 边缘色散。超过 0.25 会像彩虹 |
 | `enableSensorHighlight` | Boolean | `false` | — | **33+** 高光跟随重力传感器 |
@@ -881,7 +881,7 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 
 **核心组件：**
 - `LiquidGlassView` - 主视图组件，支持触摸交互
-- `GlassLensRenderer` - 单 pass AGSL 透镜管线：SDF 折射、色散、法线高光、内阴影、smin 融合（API 33+）
+- `GlassLensRenderer` - 单 pass AGSL 透镜管线：SDF 折射、色散、法线双瓣边缘亮线、smin 融合（API 33+）
 - `GlassRuntimeEffects` - AGSL 颜色滤镜/混合模式：vibrancy 饱和度、单 pass 边缘高光、逐像素自适应染色（API 36+，自动回退）
 - `LightSourceController` - 重力传感器世界光源（镜面高光方向）
 - `BackdropLuminanceMeter` - 背景亮度采样（自适应染色数据源）

@@ -9,8 +9,7 @@
  *     → 屏幕空间法线（SDF 数值梯度）
  *     → 折射（沿法线向外采样 → 边缘出现背景压缩带，透镜感的来源）
  *     → 色散（三通道折射率不同 → 边缘光谱边纹）
- *     → 镜面高光（dot(N, L)，光源方向由重力传感器驱动）
- *     → 内阴影（背光侧，制造厚度）
+ *     → 边缘亮线（dot(N, L) 的两道对称角度瓣：迎光侧 + 背光侧内壁反射，光源方向可由重力传感器驱动）
  *     → 自适应染色 / Clear 压暗层 / 本体染色（glassTint）/ 饱和度
  *
  * 管线：backdrop 录制（带外扩边距）→ RenderEffect 模糊 → 本着色器 → 输出。
@@ -18,7 +17,7 @@
  *
  * 相比 CPU 管线：零 Bitmap 分配、零像素回读、背景是"活"的。
  * 相比旧 GPU 管线（HardwareBackdropBlur）：折射几何与真实形状一致、
- * 色散沿法线方向（旧实现是标量广播导致的 45° 对角偏移）、多出高光/内阴影/融合。
+ * 色散沿法线方向（旧实现是标量广播导致的 45° 对角偏移）、多出高光/融合。
  */
 package com.example.liquidglass
 
@@ -72,9 +71,7 @@ internal class GlassLensRenderer {
             uniform float  dispersion;
             uniform float2 lightDir;
             uniform float  specStrength;
-            uniform float  innerShadow;
             uniform float  rimBandMax;   // 贴边高光带宽度上限（px，小控件按短边收）
-            uniform float  shadowMax;    // 内阴影带宽度上限（px，小控件按短边收）
             uniform float4 tintColor;
             uniform float  adaptiveTint;
             uniform float4 glassTint;
@@ -101,7 +98,7 @@ internal class GlassLensRenderer {
                 return mix(b, a, h) - k * h * (1.0 - h);
             }
 
-            // 斜面 / 法线 / 高光 / 内阴影用透镜形状（平边已延伸出去，不产生边缘）
+            // 斜面 / 法线 / 高光用透镜形状（平边已延伸出去，不产生边缘）
             float lensSDF(float2 p) {
                 float d = sdRoundedBox4(p - shape1L.xy, shape1L.zw, radii1);
                 if (shape2.z > 0.5) {
@@ -250,34 +247,26 @@ internal class GlassLensRenderer {
                     col = mix(col, clamp(absorbed + scattered, float3(0.0), float3(1.0)), glassTint.a);
                 }
 
-                // 光照：同一法线场驱动。整圈轮廓的明暗只由 dot(N, -L) 决定，
-                // 没有与方向无关的常亮项——侧向（法线垂直于光线处）亮度归零，不会
-                // 留下一圈固定描边。两个角度瓣：迎光侧主瓣（pow 2.5 铺开成连续斜面
-                // 渐变，叠一个 pow 8 的收紧核保留正对光源处的亮点，避免大斜面时出现
-                // 大面积泛白光斑）+ 背光侧的弱回光瓣（透明介质的内壁反射：iOS 玻璃
-                // 右下角那道弱一截的亮边，没有它背光半圈在深色背景上会整段消失）
+                // 光照：同一法线场驱动。整圈亮边的明暗只由 dot(N, -L) 决定，没有与方向
+                // 无关的常亮项——侧向（法线垂直于光线处）归零，不会留下一圈固定描边。
+                // 两道对称的角度瓣（沿 iOS 26 控制中心截图里的控件一圈逐角量得）：迎光侧
+                // 与背光侧峰值相等（背光侧是透明介质的内壁反射），瓣宽 pow 4.5（离轴 30°
+                // 剩一半、45° 归零）；迎光侧另加一层向内的柔和辉光——iOS 左上角是亮线 +
+                // 辉光，右下角只有亮线，两侧的边缘内侧都没有暗带
                 float facing = dot(n, -lightDir);
-                float facingPos = max(facing, 0.0);
-                float facingNeg = max(-facing, 0.0);
+                float lobeF = pow(max(facing, 0.0), 4.5);
+                float lobeB = pow(max(-facing, 0.0), 4.5);
 
-                // 贴边窄带（宽度与斜面弱相关，上限默认 9px、小控件按短边收）+ 最外层 1px 发丝带
+                // 贴边亮线（中心在边内 1px，半宽 2px）+ 迎光侧辉光：从亮线内侧（边内 3px）起
+                // 向内 1.5 次幂衰减，宽度与斜面弱相关、上限默认 6px、小控件按短边收。
+                // 辉光不叠在亮线上，两侧亮线峰值相等
                 float bandW = clamp(bevel * 0.3, 2.0, rimBandMax);
-                float rim = clamp(1.0 - (-d - 0.5) / bandW, 0.0, 1.0) * cov;
-                float hair = clamp(1.0 - abs(d + 1.0) / 1.5, 0.0, 1.0) * cov;
-                float lobe = pow(facingPos, 2.5);
-                float back = pow(facingNeg, 2.5);
-                float spec = (rim * (0.34 * lobe + 0.22 * pow(facingPos, 8.0) + 0.15 * back)
-                              + hair * (0.34 * lobe + 0.15 * back))
+                float glowIn = clamp((-d - 1.0) / 2.0, 0.0, 1.0);
+                float glow = glowIn * pow(clamp(1.0 - (-d - 3.0) / bandW, 0.0, 1.0), 1.5) * cov;
+                float hair = clamp(1.0 - abs(d + 1.0) / 2.0, 0.0, 1.0) * cov;
+                float spec = (hair * 0.70 * (lobeF + lobeB) + glow * 0.10 * lobeF)
                              * specStrength * (1.0 - 0.35 * press);
                 col += float3(spec);
-
-                // 内阴影：背光侧边缘内部微暗（宽度独立于斜面，上限默认 28px、小控件按短边收）。
-                // 暗带落在回光亮边的内侧：背光侧是"细亮边 → 内侧暗带"，迎光侧是"亮边 → 亮渐变"，
-                // 整圈轮廓因此是"迎光渐亮 → 侧向消隐 → 背光弱亮 + 内阴影"的连续过渡
-                float shadowW = clamp(bevel, 4.0, shadowMax);
-                float shadowBand = pow(clamp(1.0 + d / shadowW, 0.0, 1.0), 1.5);
-                float ish = shadowBand * facingNeg * innerShadow;
-                col = col * (1.0 - 0.45 * ish);
 
                 col = clamp(col, float3(0.0), float3(1.0));
                 return half4(half3(col * cov), half(cov));
@@ -305,12 +294,10 @@ internal class GlassLensRenderer {
         val refract: Float,
         val falloff: Float,     // 折射剖面：> 0 逆幂衰减指数，0 = 平方斜面
         val outward: Boolean,   // 折射向外采样（true）/ 向内（旧行为）
-        val rimBandMax: Float,  // 贴边高光带宽度上限（px）
-        val shadowMax: Float,   // 内阴影带宽度上限（px）
+        val rimBandMax: Float,  // 迎光侧辉光带宽度上限（px）
         val dispersion: Float,
         val lightX: Float, val lightY: Float,
         val spec: Float,
-        val innerShadow: Float,
         val tint: Int,          // straight-alpha ARGB（adaptiveTint 时被忽略）
         val adaptiveTint: Boolean, // 逐像素自适应染色（Regular + enableAdaptiveTint）
         val glassTint: Int,     // 使用方指定的玻璃本体色（straight-alpha ARGB，a=0 关闭）
@@ -538,9 +525,7 @@ internal class GlassLensRenderer {
         sh.setFloatUniform("dispersion", p.dispersion)
         sh.setFloatUniform("lightDir", p.lightX, p.lightY)
         sh.setFloatUniform("specStrength", p.spec)
-        sh.setFloatUniform("innerShadow", p.innerShadow)
         sh.setFloatUniform("rimBandMax", p.rimBandMax)
-        sh.setFloatUniform("shadowMax", p.shadowMax)
         sh.setFloatUniform(
             "tintColor",
             Color.red(p.tint) / 255f,

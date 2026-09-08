@@ -124,8 +124,8 @@ glass.enableDynamicBackground = true   // REQUIRED if the backdrop moves or the 
   records the backdrop with a margin as wide as the refraction reach and renders through
   an offscreen compositing layer.
 - **Small controls are handled automatically.** `adaptiveLensScale` (default `true`, API 33+)
-  caps `bevelWidth`, `refractionHeight` and the rim-highlight / inner-shadow band widths by
-  the shape's short side (bevel ≤ 0.3×, highlight band ≤ 0.05×, shadow band ≤ 0.12×;
+  caps `bevelWidth`, `refractionHeight` and the rim-highlight band width by
+  the shape's short side (bevel ≤ 0.3×, highlight band ≤ 0.05×;
   refraction ≤ 0.7× and, below 110dp, additionally scaled by short side / 110dp, so a
   48dp button gets ~38px instead of 200px). Shapes of 110dp and up never hit the caps at
   the defaults and explicit smaller values are kept, so buttons, FABs and toasts need no

@@ -51,15 +51,13 @@ open class LiquidGlassView @JvmOverloads constructor(
     companion object {
         private const val TAG = "LiquidGlassView"
 
-        // 透镜几何自适应：各量相对形状短边的上限比例，以及高光带 / 内阴影带的固定上限（px）。
+        // 透镜几何自适应：各量相对形状短边的上限比例，以及高光辉光带的固定上限（px）。
         // 折射的上限在 ADAPTIVE_REF_DP 以下额外乘 (短边 / 参考尺寸)，越小收得越快
         private const val ADAPTIVE_REF_DP = 110f
         private const val ADAPTIVE_BEVEL_RATIO = 0.3f
         private const val ADAPTIVE_REFRACT_RATIO = 0.7f
         private const val ADAPTIVE_RIM_RATIO = 0.05f
-        private const val ADAPTIVE_SHADOW_RATIO = 0.12f
         private const val RIM_BAND_MAX_PX = 6f
-        private const val SHADOW_BAND_MAX_PX = 28f
         private const val ENABLE_PERFORMANCE_LOG = false  // 性能日志开关（仅调试时打开，每帧构造日志字符串有开销）
         private const val ENABLE_MEMORY_LOG = false  // 内存日志开关（默认关闭，避免日志污染）
 
@@ -354,7 +352,7 @@ open class LiquidGlassView @JvmOverloads constructor(
     private var flatLeft = false
 
     /**
-     * 把某几条边设为"平边"：那条边上没有斜面、折射带、高光和内阴影，看起来玻璃
+     * 把某几条边设为"平边"：那条边上没有斜面、折射带和高光，看起来玻璃
      * 是从那条边延伸出去的。几块玻璃贴边拼成一块（M3 分组列表）时，相邻边设平边，
      * 拼接处就不会各自出现一圈透镜边缘。
      *
@@ -433,7 +431,7 @@ open class LiquidGlassView @JvmOverloads constructor(
     // ==================== Liquid Glass 2.0（API 33+ 统一透镜管线） ====================
 
     /**
-     * 允许使用 API 33+ 的统一透镜着色器管线（SDF 折射 + 色散 + 高光 + 内阴影 + 融合）
+     * 允许使用 API 33+ 的统一透镜着色器管线（SDF 折射 + 色散 + 高光 + 融合）
      *
      * 渲染路径优先级：
      * - useShaderPipeline && useHardwareBlurWhenPossible && API 33+ → 透镜管线（2.0）
@@ -504,8 +502,8 @@ open class LiquidGlassView @JvmOverloads constructor(
      * 透镜几何随控件尺寸自适应（仅透镜管线，默认开）
      *
      * [bevelWidth] / [refractionHeight] 的默认值是按大面板定的，直接落到 40dp 的按钮上
-     * 整块都是边缘带，贴边高光和内阴影也显得粗。开启后按（最小）形状的短边钳一次：
-     * 斜面 ≤ 短边 × 0.3，高光带上限 ≤ 短边 × 0.05，内阴影带上限 ≤ 短边 × 0.12，
+     * 整块都是边缘带，贴边高光也显得粗。开启后按（最小）形状的短边钳一次：
+     * 斜面 ≤ 短边 × 0.3，高光辉光带上限 ≤ 短边 × 0.05，
      * 折射 ≤ 短边 × 0.7 且在 110dp 以下再按 (短边 / 110dp) 平方收——48dp 的按钮约 38px。
      * 短边达到 110dp 时这几个上限都不低于默认值，中大面板不受影响；显式设的更小的值
      * 同样不受影响。关掉则一律按设定值原样渲染。
@@ -1294,7 +1292,7 @@ open class LiquidGlassView @JvmOverloads constructor(
             return
         }
 
-        // ✅ API 33+ 统一透镜管线（Liquid Glass 2.0：折射+色散+高光+内阴影+融合）
+        // ✅ API 33+ 统一透镜管线（Liquid Glass 2.0：折射+色散+高光+融合）
         if (tryDrawLensGlass(canvas, calculatedBlurRadius)) {
             // 边缘高光由着色器的法线光照完成，无需 Kotlin 层描边
             if (enableDynamicBackground) {
@@ -1384,8 +1382,8 @@ open class LiquidGlassView @JvmOverloads constructor(
     /**
      * 尝试走 API 33+ 统一透镜着色器管线
      *
-     * 覆盖：模糊、饱和度、SDF 折射、色散、法线镜面高光（传感器光源）、
-     * 内阴影、自适应染色、Clear 压暗、按压液态、双形状 smin 融合。
+     * 覆盖：模糊、饱和度、SDF 折射、色散、法线边缘亮线（左上 / 右下两道对称瓣，
+     * 传感器光源）、自适应染色、Clear 压暗、按压液态、双形状 smin 融合。
      * 自定义背景捕获仍走 CPU 管线。
      *
      * @return true 表示已完成绘制
@@ -1436,12 +1434,11 @@ open class LiquidGlassView @JvmOverloads constructor(
         val s2hh = if (p2 != null) (p2.height() / 2f).coerceAtLeast(1f) else 0f
         val r2 = if (p2 != null) secondaryShapeCorner.coerceIn(0f, min(s2hw, s2hh)) else 0f
 
-        // —— 尺寸自适应：按最小形状的短边钳斜面 / 折射 / 高光带 / 内阴影带。
+        // —— 尺寸自适应：按最小形状的短边钳斜面 / 折射 / 高光辉光带。
         // 默认值是给大面板定的，小控件照搬整块都是边缘带；短边够大时碰不到上限 ——
         val bevelEff: Float
         val refractEff: Float
         val rimBandMax: Float
-        val shadowMax: Float
         if (adaptiveLensScale) {
             var minDim = 2f * min(s1hw, s1hh)
             if (p2 != null) minDim = min(minDim, 2f * min(s2hw, s2hh))
@@ -1452,12 +1449,10 @@ open class LiquidGlassView @JvmOverloads constructor(
             bevelEff = min(bevelWidth, minDim * ADAPTIVE_BEVEL_RATIO).coerceAtLeast(2f)
             refractEff = min(refractionHeight, refractCap)
             rimBandMax = min(RIM_BAND_MAX_PX, minDim * ADAPTIVE_RIM_RATIO).coerceAtLeast(2f)
-            shadowMax = min(SHADOW_BAND_MAX_PX, minDim * ADAPTIVE_SHADOW_RATIO).coerceAtLeast(4f)
         } else {
             bevelEff = bevelWidth
             refractEff = refractionHeight
             rimBandMax = RIM_BAND_MAX_PX
-            shadowMax = SHADOW_BAND_MAX_PX
         }
         // 不翻折：位移不超过剖面单调的上限时采样坐标沿深度单调（贴边放大率无穷大、往内降到 1），
         // 边缘只做放大延展；超过上限采样会折返，出现压缩镜像环。上限 = 1 / 剖面在贴边处的斜率：
@@ -1547,11 +1542,9 @@ open class LiquidGlassView @JvmOverloads constructor(
             falloff = falloff,
             outward = refractionOutward,
             rimBandMax = rimBandMax,
-            shadowMax = shadowMax,
             dispersion = disp,
             lightX = lx, lightY = ly,
             spec = spec,
-            innerShadow = material.innerShadow,
             tint = if (adaptivePerPixel) 0 else currentTintColor(),
             adaptiveTint = adaptivePerPixel,
             glassTint = glassTint,

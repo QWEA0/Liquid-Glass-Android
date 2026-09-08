@@ -7,7 +7,7 @@
 
 | 条件 | 路径 | 覆盖能力 |
 |---|---|---|
-| API 33+ 且 `useShaderPipeline` | **透镜管线（2.0）** | 模糊、饱和度（vibrancy 曲线）、SDF 折射、色散、法线高光（传感器光源）、内阴影、自适应染色（逐像素）、Clear 压暗、按压液态、smin 融合 |
+| API 33+ 且 `useShaderPipeline` | **透镜管线（2.0）** | 模糊、饱和度（vibrancy 曲线）、SDF 折射、色散、法线双瓣边缘亮线（传感器光源）、自适应染色（逐像素）、Clear 压暗、按压液态、smin 融合 |
 | API 31–32，或 `useShaderPipeline=false` | 旧 GPU 管线 | 模糊 + 饱和度（33+ 时另有旧位移贴图色差，供 A/B 对比） |
 | API 24–30，或强制 CPU / 自定义背景捕获 | CPU 管线 | 模糊、色差、色散、边缘高光（原有全部能力） |
 | 系统开启「高对比度文字」或 `FORCE_OPAQUE` | 不透明降级 | 实底圆角矩形 + 细边框（对应 iOS Reduce Transparency） |
@@ -34,10 +34,12 @@ backdrop 录制（带 margin 外扩）
       7. 触摸凸起：手指下方高斯泡状局部放大（press uniform 联动）
       8. 饱和度（提饱和端 vibrancy 曲线：低饱和多提/高饱和少提/高光保护）
          → 自适应染色（enableAdaptiveTint 时按局部亮度逐像素过渡）/Clear 压暗
-      9. 镜面高光：dot(N, -L) 迎光主瓣（pow 2.5 铺开 + pow 8 收紧核）+ 背光侧
-         弱回光瓣（内壁反射，约主瓣的 0.45）+ 1px 贴边亮线，全部随角度衰减到 0，
-         侧向消隐，无方向无关的常亮项
-     10. 内阴影：背光侧边缘内部渐暗（厚度感），落在回光亮边的内侧
+      9. 边缘亮线：dot(N, -L) 的两道对称角度瓣（迎光侧 + 背光侧内壁反射，峰值相等，
+         pow 4.5：离轴 30° 剩一半、45° 归零）驱动一条 2px 贴边亮线；迎光侧另加一层
+         从亮线内侧起、≤ 6px 的 1.5 次幂衰减辉光，不叠在亮线上，两侧亮线峰值相等。
+         侧向消隐，无方向无关的常亮项，边缘内侧没有暗带。
+         瓣形、峰值比和默认轴向（30° / 210°）都是沿 iOS 26 控制中心截图里的控件
+         一圈逐角量出来的
 ```
 
 关键点：
@@ -71,9 +73,9 @@ backdrop 录制（带 margin 外扩）
 | `refractionFalloff` | 2 | 折射衰减指数（0-4）：> 0 逆幂剖面，弯折压在贴边成细密的压缩环，越大环越细；0 = 平方斜面 |
 | `refractionNoFold` | false | true 时折射单调不翻折：贴边放大率最高、往内降到 1，边缘只放大延展；默认允许折返成压缩镜像环 |
 | `refractionOutward` | false | 可选的凸透镜模式：true 向外采样（形状外的背景弯进边缘）；默认向内压缩镜像，与 iOS 一致 |
-| `adaptiveLensScale` | true | 斜面 / 折射 / 高光带 / 内阴影带按形状短边钳，小控件不再整块都是边缘带 |
+| `adaptiveLensScale` | true | 斜面 / 折射 / 高光辉光带按形状短边钳，小控件不再整块都是边缘带 |
 | `dispersionStrength` | 0.10 | 色散强度（与色差/色散开关及其滑杆联动） |
-| `enableSensorHighlight` | false | 高光跟随重力传感器（光源固定在世界坐标）；关闭时用固定的左上光源 |
+| `enableSensorHighlight` | false | 高光跟随重力传感器（光源固定在世界坐标）；关闭时用固定的左上光源（轴向离水平约 30°） |
 | `enableAdaptiveTint` | false | 背景亮度自适应染色（透镜管线逐像素；亮度计仍供 `glassAppearanceListener` 使用） |
 | `glassAppearanceListener` | null | `(isOverLight) -> Unit`，背景明暗翻转回调（联动前景文字色） |
 | `isOverLightBackground` | — | 当前明暗判定（只读） |
@@ -113,7 +115,7 @@ backdrop 录制（带 margin 外扩）
 | 实时 SDF 折射 / 边缘压缩带 | ✅ 透镜管线 |
 | 色散（沿法线的光谱边纹） | ✅ 透镜管线（同时修复了 CPU/旧 GPU 实现的 45° 对角偏移 bug） |
 | 法线驱动镜面高光 + 传感器光源 | ✅ |
-| 内阴影 / 厚度感 | ✅ |
+| 左上 / 右下两道对称亮边（iOS 的双亮边） | ✅ 瓣形与轴向按 iOS 26 截图量得 |
 | Regular / Clear 双材质 | ✅ |
 | 背景亮度自适应 + 前景外观联动 | ✅（采样式，非逐帧） |
 | 液态融合（smin） | ✅ 单视图内双形状；跨视图融合未做 |
