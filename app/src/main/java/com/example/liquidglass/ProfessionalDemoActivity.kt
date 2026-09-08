@@ -2575,6 +2575,7 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         target.enableAdaptiveTint = src.enableAdaptiveTint
         target.refractionOutward = src.refractionOutward
         target.refractionNoFold = src.refractionNoFold
+        target.refractionFalloff = src.refractionFalloff
         target.adaptiveLensScale = src.adaptiveLensScale
         target.glassTint = src.glassTint
         target.accessibilityMode = src.accessibilityMode
@@ -2872,6 +2873,11 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         addSlider(group, 200, glassView.refractionHeight.toInt(),
             { getString(R.string.lens_refraction, it.toFloat()) }) { p ->
             applyGlass { it.refractionHeight = p.toFloat() }
+        }
+        // 折射衰减指数 0-4（0 = 平方斜面）
+        addSlider(group, 40, (glassView.refractionFalloff * 10f).toInt(),
+            { getString(R.string.lens_falloff, it / 10f) }) { p ->
+            applyGlass { it.refractionFalloff = p / 10f }
         }
         // 色散强度 0-1
         addSlider(group, 100, (glassView.dispersionStrength * 100f).toInt(),

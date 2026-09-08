@@ -53,8 +53,10 @@
         <attr name="adaptiveLensScale" format="boolean" />
         <!-- 折射向外采样（可选的凸透镜模式：形状外的背景弯进边缘）；默认 false = 向内压缩镜像，与 iOS 一致 -->
         <attr name="refractionOutward" format="boolean" />
-        <!-- 折射不翻折（默认 true，与 iOS 一致）：位移钳在斜面宽度的一半以内，边缘只放大延展；false 允许折返成压缩镜像环 -->
+        <!-- 折射不翻折（默认 false）：true 把位移钳在剖面单调的上限以内，边缘只放大延展；默认允许折返成贴边的压缩镜像环 -->
         <attr name="refractionNoFold" format="boolean" />
+        <!-- 折射衰减指数（0-4，默认 2）：> 0 为引力透镜式逆幂剖面，越贴边弯折越剧烈；0 = 平方斜面，弯折沿斜面带均匀铺开 -->
+        <attr name="refractionFalloff" format="float" />
 
         <!-- 玻璃本体染色：颜色自带的 alpha 即染色强度；
              glassTintStrength 用来单独指定强度（0-1），会覆盖颜色里的 alpha -->

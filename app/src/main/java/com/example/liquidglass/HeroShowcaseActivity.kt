@@ -90,8 +90,8 @@ class HeroShowcaseActivity : AppCompatActivity() {
             material = GlassMaterial.REGULAR
             cornerRadius = 999f
             // 首屏参数偏“展示向”：折射与色散都拉到肉眼可辨
-            refractionHeight = 36f
-            bevelWidth = 72f
+            refractionHeight = 200f
+            bevelWidth = 56f
             dispersionStrength = 0.16f
             blurAmount = 0.055f
             saturation = 150f

@@ -460,7 +460,7 @@ open class LiquidGlassView @JvmOverloads constructor(
         }
 
     /** 边缘斜面带宽度（px）：玻璃"厚度"的视觉宽度，折射和高光都落在这一圈里（仅透镜管线） */
-    var bevelWidth = 64f
+    var bevelWidth = 48f
         set(value) {
             val clamped = value.coerceIn(2f, 200f)
             if (field != clamped) {
@@ -470,10 +470,11 @@ open class LiquidGlassView @JvmOverloads constructor(
         }
 
     /**
-     * 边缘最大折射位移（px，仅透镜管线）。[refractionNoFold] 开着时实际生效值不超过
-     * 斜面宽度的一半，边缘只做放大延展；想要更强的透镜感先加宽 [bevelWidth]
+     * 边缘最大折射位移（px，仅透镜管线）：贴边处的采样点往内走多远。位移沿
+     * [refractionFalloff] 决定的剖面往内衰减；[refractionNoFold] 开着时实际生效值
+     * 会被钳到剖面单调的上限（平方斜面为斜面宽度的一半，逆幂剖面更小）
      */
-    var refractionHeight = 32f
+    var refractionHeight = 160f
         set(value) {
             val clamped = value.coerceIn(0f, 300f)
             if (field != clamped) {
@@ -529,16 +530,34 @@ open class LiquidGlassView @JvmOverloads constructor(
         }
 
     /**
-     * 折射不翻折（仅透镜管线，默认开，与 iOS 一致）
+     * 折射不翻折（仅透镜管线，默认关）
      *
-     * 位移钳在斜面宽度的一半以内，采样坐标沿深度单调：贴边处放大率无穷大、往内平滑降到 1，
-     * 边缘附近的内容被拉伸延展到边上，像真的玻璃厚边。false 允许位移超过这个比例，
-     * 采样会折返，边缘变成旧版那种把内侧背景折叠数次的压缩镜像环。
+     * true 时位移钳在剖面单调的上限以内（平方斜面为斜面宽度的一半、逆幂剖面约为
+     * 斜面宽度 × (1 - 5^-p) / 4p），采样坐标沿深度单调：贴边处放大率无穷大、往内平滑降到 1，
+     * 边缘只把附近的内容拉伸延展到边上。默认关：位移超过这个上限后采样折返，
+     * 边缘出现把内侧背景压缩进来的镜像环——贴边那一圈"厚玻璃"的透镜感就来自这里。
      */
-    var refractionNoFold = true
+    var refractionNoFold = false
         set(value) {
             if (field != value) {
                 field = value
+                invalidate()
+            }
+        }
+
+    /**
+     * 折射衰减指数（仅透镜管线，0–4，默认 2）：位移从贴边往内的衰减剖面
+     *
+     * > 0 为引力透镜式的逆幂衰减：位移 ∝ (1 + x/k)^-p，核半径 k 为斜面宽度的 1/4，
+     * 带末端归零。越贴边弯折越剧烈——p = 2 时离边 k 处只剩 1/4，绝大部分弯折压在
+     * 最外几个像素成一圈细而密的压缩环，内侧只留一段缓慢回落的轻微放大；指数越大环越细。
+     * 0 = 旧的平方斜面剖面，弯折沿整条斜面带均匀铺开。
+     */
+    var refractionFalloff = 2f
+        set(value) {
+            val clamped = value.coerceIn(0f, 4f)
+            if (field != clamped) {
+                field = clamped
                 invalidate()
             }
         }
@@ -1016,6 +1035,7 @@ open class LiquidGlassView @JvmOverloads constructor(
             adaptiveLensScale = ta.getBoolean(R.styleable.LiquidGlassView_adaptiveLensScale, adaptiveLensScale)
             refractionOutward = ta.getBoolean(R.styleable.LiquidGlassView_refractionOutward, refractionOutward)
             refractionNoFold = ta.getBoolean(R.styleable.LiquidGlassView_refractionNoFold, refractionNoFold)
+            refractionFalloff = ta.getFloat(R.styleable.LiquidGlassView_refractionFalloff, refractionFalloff)
             glassTint = ta.getColor(R.styleable.LiquidGlassView_glassTint, glassTint)
             // 单独给了强度就覆盖颜色自带的 alpha（app:glassTint="#0A84FF" 这种写法
             // 解析出来 alpha 是 255，不给个强度旋钮就只能是最浓的一档）
@@ -1422,7 +1442,7 @@ open class LiquidGlassView @JvmOverloads constructor(
             var minDim = 2f * min(s1hw, s1hh)
             if (p2 != null) minDim = min(minDim, 2f * min(s2hw, s2hh))
             // 折射在参考尺寸（110dp）以下按平方收：48dp 的按钮约 38px，
-            // 110dp 及以上不低于默认值 200px，中等面板的手感不变
+            // 110dp 及以上上限不低于 0.7 × 短边，中等面板的手感不变
             val refPx = ADAPTIVE_REF_DP * resources.displayMetrics.density
             val refractCap = ADAPTIVE_REFRACT_RATIO * minDim * min(1f, minDim / refPx)
             bevelEff = min(bevelWidth, minDim * ADAPTIVE_BEVEL_RATIO).coerceAtLeast(2f)
@@ -1435,9 +1455,21 @@ open class LiquidGlassView @JvmOverloads constructor(
             rimBandMax = RIM_BAND_MAX_PX
             shadowMax = SHADOW_BAND_MAX_PX
         }
-        // 不翻折：位移 ≤ 斜面宽度的一半时采样坐标沿深度单调（贴边放大率无穷大、往内降到 1），
-        // 边缘只做放大延展；超过这个比例采样会折返，出现旧版那种压缩镜像环
-        val refractFinal = if (refractionNoFold) min(refractEff, bevelEff * 0.5f) else refractEff
+        // 不翻折：位移不超过剖面单调的上限时采样坐标沿深度单调（贴边放大率无穷大、往内降到 1），
+        // 边缘只做放大延展；超过上限采样会折返，出现压缩镜像环。上限 = 1 / 剖面在贴边处的斜率：
+        // 平方斜面 slope = (1-t)²，斜率 2/b → b/2；逆幂剖面斜率 4p / (b(1 - 5^-p))
+        val falloff = (refractionFalloff * 100f).toInt() / 100f
+        val refractFinal = if (refractionNoFold) {
+            val monoCap = if (falloff > 0.001f) {
+                val gB = 5f.pow(-falloff)
+                bevelEff * (1f - gB) / (4f * falloff)
+            } else {
+                bevelEff * 0.5f
+            }
+            min(refractEff, monoCap)
+        } else {
+            refractEff
+        }
 
         // —— 透镜形状：平边方向把矩形推到视图外，那条边上就没有斜面 ——
         var l1cx = s1cx
@@ -1508,6 +1540,7 @@ open class LiquidGlassView @JvmOverloads constructor(
             blendK = if (p2 != null) shapeBlendSmoothing else 0f,
             bevel = bevelEff,
             refract = refractFinal,
+            falloff = falloff,
             outward = refractionOutward,
             rimBandMax = rimBandMax,
             shadowMax = shadowMax,

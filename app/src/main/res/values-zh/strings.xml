@@ -210,6 +210,7 @@
     <string name="lens_bevel">斜面宽度: %.0f px</string>
     <string name="lens_refraction">折射强度: %.0f px</string>
     <string name="lens_dispersion">色散强度: %.2f</string>
+    <string name="lens_falloff">折射衰减指数（逆幂）: %.1f</string>
     <string name="switch_a11y_opaque">无障碍不透明降级</string>
     <string name="merge_hint">拖动圆形玻璃靠近胶囊——边缘会像液体一样黏连融合</string>
     <string name="text_param_title">文字样式参数</string>

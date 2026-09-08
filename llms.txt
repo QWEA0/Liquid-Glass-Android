@@ -104,16 +104,18 @@ glass.enableDynamicBackground = true   // REQUIRED if the backdrop moves or the 
   testing or tuning, use a detailed backdrop, not a flat colour or a soft gradient.
 - **Liquid Glass 2.0 features require API 33+** (AGSL runtime shaders): `material`,
   `bevelWidth`, `refractionHeight`, `dispersionStrength`, `enableSensorHighlight`,
-  `enableAdaptiveTint`, `adaptiveLensScale`, `refractionNoFold`, `refractionOutward`,
+  `enableAdaptiveTint`, `adaptiveLensScale`, `refractionFalloff`, `refractionNoFold`, `refractionOutward`,
   `setSecondaryShape`. They degrade silently below API 33 — the classic blur/aberration
   pipeline runs instead. No crash, no exception.
-- **The rim stretches, it does not fold.** Defaults are `bevelWidth = 64f` and
-  `refractionHeight = 32f`, and `refractionNoFold` (default `true`) caps the displacement at
-  `bevelWidth / 2`. That keeps the sampling monotonic: magnification is highest right at the
-  rim and eases to 1× inside, so backdrop content near the edge is pulled and stretched to
-  the edge the way iOS Liquid Glass does. To get "more lens", widen `bevelWidth` (the
-  refraction follows); raising `refractionHeight` alone does nothing past the cap. Set
-  `refractionNoFold = false` only to reproduce the old compressed mirror ring.
+- **The bend piles up at the rim.** Defaults are `bevelWidth = 48f`, `refractionHeight = 160f`
+  and `refractionFalloff = 2f`: the displacement follows an inverse-power (gravitational-lens)
+  profile, ∝ (1 + x/k)^-p with k = `bevelWidth / 4`, so almost all of the bending sits in the
+  outermost few pixels as a thin, dense compressed ring while the interior keeps only a faint
+  magnification tail. Raise the exponent for a thinner ring, set it to `0` for the old square
+  bevel where the bend spreads evenly across the band. `refractionNoFold` (default `false`)
+  caps the displacement where the profile stays monotonic — no fold, the rim only stretches
+  nearby content to the edge — which with the inverse-power profile leaves very little
+  refraction; it is there for the iOS-style stretch look, not the default.
 - **Refraction samples inward by default** (`refractionOutward = false`, matching iOS):
   the rim shows a compressed mirror of the content under the glass. `refractionOutward =
   true` (API 33+) is an optional convex-lens mode: the rim bends in content that is still

@@ -23,18 +23,21 @@ backdrop 录制（带 margin 外扩）
       1. sceneSDF：圆角矩形 SDF（实时跟随 cornerRadius/尺寸；可选第二形状 smin 融合）
       2. 覆盖率：SDF ±0.75px 抗锯齿，形状外 alpha=0（不再需要 clipPath）
       3. 法线：SDF 数值梯度 → 屏幕空间外法线
-      4. 厚度剖面：bevelWidth 宽的斜面带，内部平坦
-      5. 折射：沿法线向内采样 refractionHeight × slope² → 边缘呈现内侧背景的
-         压缩镜像（默认，与 iOS 一致）；refractionOutward = true 时向外采样
+      4. 厚度剖面：bevelWidth 宽的斜面带，内部平坦。剖面由 refractionFalloff 决定：
+         > 0 为逆幂（引力透镜）衰减 (1 + x/k)^-p，k = bevelWidth / 4，带末端归零，
+         越贴边越剧烈；0 = 平方斜面 (1 - t)²，弯折沿整条带均匀铺开
+      5. 折射：沿法线向内采样 refractionHeight × slope → 贴边一圈内侧背景的
+         压缩镜像环（默认允许折返）；refractionOutward = true 时向外采样
          （可选的凸透镜模式：形状外的背景被弯进边缘，还没进到玻璃下面的内容
          先出现在边缘，进来之后沿边缘延展）
       6. 色散：R/G/B 三通道折射量 ×(1∓dispersion·slope) → 边缘光谱边纹
       7. 触摸凸起：手指下方高斯泡状局部放大（press uniform 联动）
       8. 饱和度（提饱和端 vibrancy 曲线：低饱和多提/高饱和少提/高光保护）
          → 自适应染色（enableAdaptiveTint 时按局部亮度逐像素过渡）/Clear 压暗
-      9. 镜面高光：dot(N, -L) 角度瓣（pow 2.5 铺开 + pow 8 收紧核）+ 1px 贴边
-         亮线，两者都随角度衰减到 0，无方向无关的常亮项
-     10. 内阴影：背光侧边缘内部渐暗（厚度感）+ 贴边压暗（与迎光侧亮线对称）
+      9. 镜面高光：dot(N, -L) 迎光主瓣（pow 2.5 铺开 + pow 8 收紧核）+ 背光侧
+         弱回光瓣（内壁反射，约主瓣的 0.45）+ 1px 贴边亮线，全部随角度衰减到 0，
+         侧向消隐，无方向无关的常亮项
+     10. 内阴影：背光侧边缘内部渐暗（厚度感），落在回光亮边的内侧
 ```
 
 关键点：
@@ -63,9 +66,10 @@ backdrop 录制（带 margin 外扩）
 |---|---|---|
 | `useShaderPipeline` | true | 透镜管线总开关（false = 旧 GPU 管线，A/B 对比用） |
 | `material` | REGULAR | `GlassMaterial.REGULAR`（自适应重可读性）/ `CLEAR`（高透 + 压暗层） |
-| `bevelWidth` | 64px | 边缘斜面带宽度（玻璃"厚度"，2-200） |
-| `refractionHeight` | 32px | 边缘最大折射位移（0-300；refractionNoFold 开着时钳在斜面宽度的一半以内） |
-| `refractionNoFold` | true | 折射单调不翻折：贴边放大率最高、往内降到 1，边缘只放大延展（与 iOS 一致）；false 允许折返成压缩镜像环 |
+| `bevelWidth` | 48px | 边缘斜面带宽度（玻璃"厚度"，2-200） |
+| `refractionHeight` | 160px | 贴边处的折射位移（0-300；refractionNoFold 开着时钳在剖面单调的上限以内） |
+| `refractionFalloff` | 2 | 折射衰减指数（0-4）：> 0 逆幂剖面，弯折压在贴边成细密的压缩环，越大环越细；0 = 平方斜面 |
+| `refractionNoFold` | false | true 时折射单调不翻折：贴边放大率最高、往内降到 1，边缘只放大延展；默认允许折返成压缩镜像环 |
 | `refractionOutward` | false | 可选的凸透镜模式：true 向外采样（形状外的背景弯进边缘）；默认向内压缩镜像，与 iOS 一致 |
 | `adaptiveLensScale` | true | 斜面 / 折射 / 高光带 / 内阴影带按形状短边钳，小控件不再整块都是边缘带 |
 | `dispersionStrength` | 0.10 | 色散强度（与色差/色散开关及其滑杆联动） |

@@ -65,6 +65,7 @@ internal class GlassLensRenderer {
             uniform float  blendK;
             uniform float  bevel;
             uniform float  refractPx;
+            uniform float  falloff;      // 折射剖面：> 0 为逆幂（引力透镜）衰减指数，0 = 平方斜面
             uniform float  refractDir;   // -1 向内采样（默认，与 iOS 一致：内侧压缩镜像）/ +1 向外（可选的凸透镜模式）
             uniform float2 sampleLo;     // 采样安全区（录制内容坐标）：区外没有内容，读到的是透明黑
             uniform float2 sampleHi;
@@ -141,10 +142,21 @@ internal class GlassLensRenderer {
                     n = float2(0.0, -1.0);
                 }
 
-                // 厚度剖面：t=1 平坦内部，t=0 边缘；slope 为斜面陡峭度
+                // 厚度剖面：t=1 平坦内部，t=0 边缘；slope 为斜面陡峭度（折射位移的比例）
                 float t = clamp(-d / max(bevel, 1.0), 0.0, 1.0);
                 float edge = 1.0 - t;
-                float slope = edge * edge;
+                float slope;
+                if (falloff > 0.001) {
+                    // 引力透镜式逆幂衰减：位移 ∝ (1 + x/k)^-p，核半径 k = 斜面宽度的 1/4，
+                    // 减去带末端的值再归一化，贴边 = 1、带末端平滑落到 0。越贴边越剧烈：
+                    // p = 2 时离边 k 处只剩 1/4，绝大部分弯折压在最外几个像素，
+                    // 内侧只留一段缓慢回落的轻微放大尾巴
+                    float gB = pow(5.0, -falloff);
+                    slope = (pow(1.0 + 4.0 * t, -falloff) - gB) / (1.0 - gB);
+                } else {
+                    // 平方斜面：弯折沿整条斜面带均匀铺开
+                    slope = edge * edge;
+                }
 
                 // 折射：refractDir = -1 沿法线向内采样（默认，与 iOS 一致）——边缘是内侧背景的
                 // 压缩镜像；+1 为可选的凸透镜模式，向外采样，形状外的背景被弯进边缘，
@@ -239,9 +251,11 @@ internal class GlassLensRenderer {
                 }
 
                 // 光照：同一法线场驱动。整圈轮廓的明暗只由 dot(N, -L) 决定，
-                // 没有与方向无关的常亮项——背光侧不会残留一条固定亮线。
-                // 角度瓣用 pow 2.5 铺开成连续斜面渐变，另叠一个 pow 8 的收紧
-                // 核保留正对光源处的亮点，避免大斜面时出现大面积泛白光斑
+                // 没有与方向无关的常亮项——侧向（法线垂直于光线处）亮度归零，不会
+                // 留下一圈固定描边。两个角度瓣：迎光侧主瓣（pow 2.5 铺开成连续斜面
+                // 渐变，叠一个 pow 8 的收紧核保留正对光源处的亮点，避免大斜面时出现
+                // 大面积泛白光斑）+ 背光侧的弱回光瓣（透明介质的内壁反射：iOS 玻璃
+                // 右下角那道弱一截的亮边，没有它背光半圈在深色背景上会整段消失）
                 float facing = dot(n, -lightDir);
                 float facingPos = max(facing, 0.0);
                 float facingNeg = max(-facing, 0.0);
@@ -251,19 +265,19 @@ internal class GlassLensRenderer {
                 float rim = clamp(1.0 - (-d - 0.5) / bandW, 0.0, 1.0) * cov;
                 float hair = clamp(1.0 - abs(d + 1.0) / 1.5, 0.0, 1.0) * cov;
                 float lobe = pow(facingPos, 2.5);
-                float spec = (rim * (0.34 * lobe + 0.22 * pow(facingPos, 8.0))
-                              + hair * 0.34 * lobe)
+                float back = pow(facingNeg, 2.5);
+                float spec = (rim * (0.34 * lobe + 0.22 * pow(facingPos, 8.0) + 0.15 * back)
+                              + hair * (0.34 * lobe + 0.15 * back))
                              * specStrength * (1.0 - 0.35 * press);
                 col += float3(spec);
 
-                // 内阴影：背光侧边缘内部微暗（宽度独立于斜面，上限默认 28px、小控件按短边收），
-                // 再叠一层贴边压暗与迎光侧的亮线对称——背光侧收成暗边，
-                // 整圈轮廓因此是"迎光渐亮 → 侧向消隐 → 背光渐暗"的连续过渡
+                // 内阴影：背光侧边缘内部微暗（宽度独立于斜面，上限默认 28px、小控件按短边收）。
+                // 暗带落在回光亮边的内侧：背光侧是"细亮边 → 内侧暗带"，迎光侧是"亮边 → 亮渐变"，
+                // 整圈轮廓因此是"迎光渐亮 → 侧向消隐 → 背光弱亮 + 内阴影"的连续过渡
                 float shadowW = clamp(bevel, 4.0, shadowMax);
                 float shadowBand = pow(clamp(1.0 + d / shadowW, 0.0, 1.0), 1.5);
                 float ish = shadowBand * facingNeg * innerShadow;
-                float rimDark = (rim * 0.6 + hair * 0.4) * pow(facingNeg, 1.5) * innerShadow;
-                col = col * clamp(1.0 - 0.45 * ish - 0.22 * rimDark, 0.0, 1.0);
+                col = col * (1.0 - 0.45 * ish);
 
                 col = clamp(col, float3(0.0), float3(1.0));
                 return half4(half3(col * cov), half(cov));
@@ -289,6 +303,7 @@ internal class GlassLensRenderer {
         val blendK: Float,
         val bevel: Float,
         val refract: Float,
+        val falloff: Float,     // 折射剖面：> 0 逆幂衰减指数，0 = 平方斜面
         val outward: Boolean,   // 折射向外采样（true）/ 向内（旧行为）
         val rimBandMax: Float,  // 贴边高光带宽度上限（px）
         val shadowMax: Float,   // 内阴影带宽度上限（px）
@@ -516,6 +531,7 @@ internal class GlassLensRenderer {
         sh.setFloatUniform("blendK", p.blendK)
         sh.setFloatUniform("bevel", p.bevel)
         sh.setFloatUniform("refractPx", p.refract)
+        sh.setFloatUniform("falloff", p.falloff)
         sh.setFloatUniform("refractDir", if (p.outward) 1f else -1f)
         sh.setFloatUniform("sampleLo", sampleLoX, sampleLoY)
         sh.setFloatUniform("sampleHi", sampleHiX, sampleHiY)
