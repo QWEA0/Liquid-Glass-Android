@@ -776,6 +776,9 @@ open class LiquidGlassView @JvmOverloads constructor(
      * - 玻璃超出 source 边界的部分捕获为透明，需要自行保证覆盖关系
      * - source 所在的树滚动时会自动触发重绘（见 [backdropScrollListener]）；
      *   内容以其它方式变化（动画等）需要自行 [invalidate] 或开 [enableDynamicBackground]
+     * - 背景（含默认的父容器）里有 WebView 时，要给它 `setLayerType(LAYER_TYPE_HARDWARE, null)`：
+     *   否则它的绘制 functor 一帧被执行两次（窗口里、玻璃离屏层里各一次），视口和变换不同，
+     *   Chromium 每次都重新请求重绘，静止页面也会每帧 onDraw
      */
     var backdropSource: View? = null
         set(value) {

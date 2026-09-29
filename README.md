@@ -376,6 +376,23 @@ anywhere in the tree, the overlap is computed from screen coordinates, and scrol
 repaints the glass automatically. Note that glass inside a `ScrollView` scrolling *with* the
 content sees a fixed backdrop by definition — that's physically correct, not a bug.
 
+**Glass over a `WebView`: why does the WebView keep redrawing on a static page?**
+Give the `WebView` a hardware layer whenever a glass's backdrop contains it (the default
+parent capture, or a `backdropSource` that is the WebView's ancestor):
+
+```kotlin
+webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+```
+
+Without it the WebView calls `onDraw` every frame even with no script, animation or
+scrolling. The glass records a reference to the WebView's display list, so Chromium's draw
+functor runs twice per frame — once in the window, once in the glass's offscreen layer —
+with a different viewport and transform each time. WebView invalidates itself whenever the
+draw constraints change, and the two draws never agree. With a hardware layer the functor
+draws once into the WebView's own layer and both the window and the glass read that
+texture; the cost is one WebView-sized texture. `webView.settings.offscreenPreRaster = true`
+only mitigates it: the loop settles when idle but runs for a few seconds after every scroll.
+
 **Can I put glass in a `Dialog` / `BottomSheetDialog` / `PopupWindow`?**
 Yes — the demo app's **Overlays** scene is a working `BottomSheetDialog`. Three things differ
 from the in-activity case:
@@ -837,6 +854,21 @@ glass.blurMethod = BlurMethod.SMART         // 合法枚举名见下方表格
 如果两者没法放在同一个父容器里，就把 `backdropSource` 指向那个滚动视图——玻璃可以待在树的
 任意位置，覆盖区域按屏幕坐标实时算，滚动时自动重绘。另外，玻璃如果是**跟着内容一起滚动**的，
 它看到的背景本来就不变，这是物理正确的结果，不是 bug。
+
+**玻璃盖在 `WebView` 上，页面静止时 WebView 为什么还在一直重绘？**
+只要玻璃的背景里包含 `WebView`（默认捕获父容器，或 `backdropSource` 指向 WebView 的祖先），
+就给这个 WebView 开硬件层：
+
+```kotlin
+webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+```
+
+不开的话，即使没有脚本、动画和滚动，WebView 也会每帧 `onDraw`。玻璃录制的是对 WebView
+显示列表的引用，于是 Chromium 的绘制 functor 一帧被执行两次——窗口里一次、玻璃的离屏层里
+一次——两次的视口和变换不同。WebView 每次发现绘制约束变了就会让自己重绘，而这两次永远对不上。
+开了硬件层之后 functor 只画进 WebView 自己的层一次，窗口和玻璃读的都是这张纹理，代价是多一张
+WebView 大小的纹理。`webView.settings.offscreenPreRaster = true` 只能缓解：静止后会停下，
+但每次滚动后还要多转几秒。
 
 **能在 `Dialog` / `BottomSheetDialog` / `PopupWindow` 里用玻璃吗？**
 可以，demo app 的**弹层**场景就是一个跑通的 `BottomSheetDialog`。和 Activity 内相比有三点不同：

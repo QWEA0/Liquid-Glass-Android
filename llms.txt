@@ -99,6 +99,13 @@ glass.enableDynamicBackground = true   // REQUIRED if the backdrop moves or the 
   the single most common integration mistake.
 - **The glass cannot sample views that are not behind it.** It captures its parent's
   backdrop. A `LiquidGlassView` with nothing painted behind it renders as an empty tint.
+- **A `WebView` in the backdrop needs a hardware layer.** When the glass captures a tree that
+  contains a `WebView` (its parent, or a `backdropSource` that is the WebView's ancestor), call
+  `webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)`. Otherwise the WebView's draw functor
+  runs twice per frame (window + the glass's offscreen layer) with different viewport and
+  transform, Chromium invalidates on every draw-constraint change, and the WebView calls
+  `onDraw` every frame even on a static page. `WebSettings.offscreenPreRaster = true` only
+  mitigates it (still loops for seconds after each scroll).
 - **Refraction is invisible over smooth gradients.** The edge compression ring and
   dispersion fringe only read against high-frequency content (icons, text, photos). When
   testing or tuning, use a detailed backdrop, not a flat colour or a soft gradient.
