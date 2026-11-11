@@ -3433,20 +3433,17 @@ class ProfessionalDemoActivity : AppCompatActivity() {
         val stats = (statsSource ?: glassView).lastFrameStats ?: return
         val isGpu = stats.effectName.startsWith("GPU")
 
-        val fps = when {
-            stats.drawFps > 0 -> stats.drawFps
-            stats.totalMs > 0f -> (1000f / stats.totalMs).toInt()
-            else -> 0
-        }
+        // 只显示实测绘制频率；GPU 录制耗时不包含实际着色和屏幕呈现。
+        val drawRate = stats.drawFps.takeIf { it > 0 }?.toString() ?: "--"
 
         fun fmt(ms: Float) = String.format("%.2f", ms)
 
         val overlayText = if (isGpu) {
-            "FPS: $fps\n${stats.effectName}\n${fmt(stats.totalMs)}ms"
+            "Draw/s: $drawRate\n${stats.effectName}\nrecord ${fmt(stats.totalMs)}ms"
         } else {
             val blurTag = if (stats.blurRecomputed) "" else "*"
             val effectTag = if (stats.effectRecomputed) "" else "*"
-            "FPS: $fps  CPU\n" +
+            "Draw/s: $drawRate  CPU\n" +
                 "capture ${fmt(stats.captureMs)}ms\n" +
                 "blur    ${fmt(stats.blurMs)}ms$blurTag\n" +
                 "effect  ${fmt(stats.effectMs)}ms$effectTag\n" +
@@ -3455,12 +3452,12 @@ class ProfessionalDemoActivity : AppCompatActivity() {
 
         val debugText = if (isGpu) {
             "${stats.effectName} · RenderEffect\n" +
-                "record ${fmt(stats.totalMs)}ms · $fps FPS"
+                "record ${fmt(stats.totalMs)}ms · $drawRate draw/s"
         } else {
             "CPU · ${glassView.blurMethod}\n" +
                 "capture ${fmt(stats.captureMs)} | blur ${fmt(stats.blurMs)} | " +
                 "effect ${fmt(stats.effectMs)}\n" +
-                "total ${fmt(stats.totalMs)}ms · $fps FPS · " +
+                "total ${fmt(stats.totalMs)}ms · $drawRate draw/s · " +
                 "${stats.processedWidth}×${stats.processedHeight}\n" +
                 "(* = cache hit)"
         }
