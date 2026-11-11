@@ -967,7 +967,7 @@ open class LiquidGlassView @JvmOverloads constructor(
     // 触摸交互状态
     private var touchX = 0f
     private var touchY = 0f
-    private var isPressed = false
+    private var isGlassPressed = false
 
     // 缩放状态：按压缩放（动画驱动）与弹性拉伸（拖拽驱动）相乘后
     // 应用到 View 变换属性（见 applyGlassScale）
@@ -1527,7 +1527,7 @@ open class LiquidGlassView @JvmOverloads constructor(
 
         // —— 按压/触摸（量化到 0.01） ——
         val press = (pressDepth * 100f).toInt() / 100f
-        val tAmp = if (isPressed || press > 0f) press else 0f
+        val tAmp = if (isGlassPressed || press > 0f) press else 0f
         val tx = (touchX * 2f).toInt() / 2f
         val ty = (touchY * 2f).toInt() / 2f
 
@@ -2102,17 +2102,23 @@ open class LiquidGlassView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.action) {
+        // 点击、长按、Tooltip 和移出后的取消由框架统一处理，避免重复派发点击。
+        val handled = super.onTouchEvent(event)
+        if (!isEnabled) {
+            if (isGlassPressed) releaseTouchFeedback()
+            return handled
+        }
+
+        when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 touchX = event.x
                 touchY = event.y
-                isPressed = true
+                isGlassPressed = true
                 updateTouchOffset(event.x, event.y)
                 if (enablePressEffect) {
                     animateScale(true)
                     animatePress(true)
                 }
-                return true
             }
             MotionEvent.ACTION_MOVE -> {
                 touchX = event.x
@@ -2121,26 +2127,21 @@ open class LiquidGlassView @JvmOverloads constructor(
                 if (enablePressEffect) {
                     updateElasticScale()
                 }
-                return true
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                isPressed = false
-                touchOffsetX = 0f
-                touchOffsetY = 0f
-                // 无条件归位：即使按住期间效果被关闭，也不能卡在缩放状态
-                animateScale(false)
-                animatePress(false)
-                // 事件被这里消费了，不自己派发的话 OnClickListener 永远不会触发；
-                // 手指移出视图后抬起视为取消，与标准 Button 行为一致
-                if (event.action == MotionEvent.ACTION_UP && isClickable &&
-                    event.x in 0f..width.toFloat() && event.y in 0f..height.toFloat()
-                ) {
-                    performClick()
-                }
-                return true
-            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> releaseTouchFeedback()
+            else -> return handled
         }
-        return super.onTouchEvent(event)
+        // 没有点击监听的玻璃仍接收后续事件，让按压动效能够完整归位。
+        return true
+    }
+
+    private fun releaseTouchFeedback() {
+        isGlassPressed = false
+        touchOffsetX = 0f
+        touchOffsetY = 0f
+        // 按住期间关闭效果也要归位。
+        animateScale(false)
+        animatePress(false)
     }
 
     /**
