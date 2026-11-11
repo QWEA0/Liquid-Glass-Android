@@ -558,8 +558,13 @@ internal class GlassLensRenderer {
         }
     }
 
+    fun releaseBackdropCache() {
+        backdropCapture.release()
+    }
+
     fun release() {
         renderNode.discardDisplayList()
+        backdropCapture.release()
         layerNode.discardDisplayList()
         shader = null
         lastParams = null

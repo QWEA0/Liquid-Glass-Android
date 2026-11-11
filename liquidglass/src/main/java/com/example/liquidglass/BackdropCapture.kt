@@ -51,6 +51,7 @@ internal class BackdropCapture {
     private val hostLocation = IntArray(2)
     private val childLocation = IntArray(2)
     private val nestedHidden = ArrayList<View>()
+    private val webViewCache = WebViewBackdropCache()
 
     /**
      * 把 [source] 的内容画进 [canvas]，跳过 [glass]
@@ -58,7 +59,12 @@ internal class BackdropCapture {
      * @param canvas 画布原点需已对齐 [source] 左上角
      */
     fun draw(canvas: Canvas, source: View, glass: View) {
+        webViewCache.prepare(canvas, source, glass)
         drawLevel(canvas, source, glass)
+    }
+
+    fun release() {
+        webViewCache.release()
     }
 
     private fun drawLevel(canvas: Canvas, host: View, glass: View) {

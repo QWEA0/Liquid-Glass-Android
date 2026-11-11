@@ -274,8 +274,13 @@ internal class HardwareBackdropBlur {
         return RenderEffect.createRuntimeShaderEffect(shader, "content")
     }
 
+    fun releaseBackdropCache() {
+        backdropCapture.release()
+    }
+
     fun release() {
         renderNode.discardDisplayList()
+        backdropCapture.release()
         aberrationShader = null
     }
 }
