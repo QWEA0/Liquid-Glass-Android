@@ -1,7 +1,12 @@
 package com.example.liquidglass
 
+import android.app.Activity
+import android.app.Dialog
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.SystemClock
 import android.view.Gravity
@@ -14,12 +19,14 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.json.JSONObject
 
 @RunWith(AndroidJUnit4::class)
 @SdkSuppress(minSdkVersion = 31)
@@ -145,7 +152,109 @@ class WebViewBackdropTest {
         await("CPU path released cache") { fixture.web.layerType == View.LAYER_TYPE_NONE }
     }
 
-    private fun assertStatic(web: CountingWebView) {
+    @Test
+    fun dialogGpuBackdropBlursContentAndReleasesCache() = withBackdrop { fixture ->
+        lateinit var glass: LiquidGlassView
+        lateinit var dialog: Dialog
+        onMain {
+            fixture.root.removeView(fixture.glasses.single())
+            fixture.web.loaded.set(false)
+            // 黑白细条纹用于区分真实模糊、空白取样和透出原始背景。
+            fixture.web.loadDataWithBaseURL(null,
+                "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
+                    "<style>body{margin:0;height:100vh;background:" +
+                    "repeating-linear-gradient(#000 0px,#000 4px,#fff 4px,#fff 8px)}</style>",
+                "text/html", "utf-8", null)
+            val activity = fixture.root.context as Activity
+            val content = FrameLayout(activity)
+            glass = LiquidGlassView(activity).apply {
+                backdropSource = fixture.root
+                useShaderPipeline = false
+                enableChromaticAberration = false
+                enableChromaticDispersion = false
+                enableAdaptiveTint = false
+                enableDynamicBackground = true
+                enableShadow = false
+                enableEdgeHighlight = false
+                glassTint = Color.TRANSPARENT
+                saturation = 1f
+                blurAmount = 1f
+            }
+            val density = activity.resources.displayMetrics.density
+            content.addView(glass, FrameLayout.LayoutParams(
+                (260 * density).toInt(), (64 * density).toInt(), Gravity.CENTER
+            ))
+            dialog = Dialog(activity).apply {
+                setContentView(content)
+                window?.apply {
+                    setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+                    setDimAmount(0f)
+                    setWindowAnimations(0)
+                }
+                show()
+                window?.setLayout(-1, -1)
+            }
+        }
+        try {
+            await("Cross-window GPU blur") { glass.lastFrameStats?.effectName == "GPU Blur" }
+            assertStatic(fixture.web, glass)
+            val position = IntArray(2)
+            var width = 0
+            var height = 0
+            onMain {
+                glass.getLocationOnScreen(position)
+                width = glass.width
+                height = glass.height
+            }
+            val screenshot = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+            try {
+                val patchSize = minOf(100, width / 2, height / 2)
+                val x = position[0] + width / 2 - patchSize / 2
+                val reference = patchStats(screenshot, x, position[1] - patchSize - 20, patchSize)
+                val blurred = patchStats(screenshot, x, position[1] + height / 2 - patchSize / 2, patchSize)
+                if (InstrumentationRegistry.getArguments().getString("captureScreenshots") == "true") {
+                    val directory = instrumentation.targetContext.filesDir
+                    File(directory, "gpu-cross-window.png").outputStream().use {
+                        screenshot.compress(Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                    File(directory, "gpu-cross-window.json").writeText(JSONObject().apply {
+                        put("api", Build.VERSION.SDK_INT)
+                        put("effect", glass.lastFrameStats?.effectName)
+                        put("patchSize", patchSize)
+                        put("referenceMean", reference[0])
+                        put("referenceVariance", reference[1])
+                        put("blurredMean", blurred[0])
+                        put("blurredVariance", blurred[1])
+                    }.toString(2))
+                }
+                assertTrue("Reference stripes must be visible", reference[1] > 2000.0)
+                assertTrue("GPU backdrop must not be black or white", blurred[0] in 60.0..220.0)
+                assertTrue("GPU backdrop must blur the stripes", blurred[1] < reference[1] / 4.0)
+            } finally {
+                screenshot.recycle()
+            }
+        } finally {
+            onMain { dialog.dismiss() }
+        }
+        onMain { assertEquals(View.LAYER_TYPE_NONE, fixture.web.layerType) }
+    }
+
+    private fun patchStats(bitmap: Bitmap, x: Int, y: Int, size: Int): DoubleArray {
+        assertTrue("Screenshot patch must be on screen",
+            size > 0 && x >= 0 && y >= 0 && x + size <= bitmap.width && y + size <= bitmap.height)
+        var sum = 0.0
+        var squares = 0.0
+        for (dy in 0 until size) for (dx in 0 until size) {
+            val value = Color.red(bitmap.getPixel(x + dx, y + dy)).toDouble()
+            sum += value
+            squares += value * value
+        }
+        val count = (size * size).toDouble()
+        val mean = sum / count
+        return doubleArrayOf(mean, maxOf(0.0, squares / count - mean * mean))
+    }
+
+    private fun assertStatic(web: CountingWebView, focusedView: View = web) {
         await("Page visually committed") { web.loaded.get() }
         // 页面提交后仍可能有栅格化尾帧，要求可见窗口连续两秒不再重绘。
         val deadline = SystemClock.uptimeMillis() + 12000L
@@ -160,7 +269,7 @@ class WebViewBackdropTest {
             } else if (SystemClock.uptimeMillis() - quietSince >= 2000L) {
                 onMain {
                     assertTrue("WebView must remain visible", web.isShown)
-                    assertTrue("Window must remain focused", web.hasWindowFocus())
+                    assertTrue("Window must remain focused", focusedView.hasWindowFocus())
                 }
                 return
             }
