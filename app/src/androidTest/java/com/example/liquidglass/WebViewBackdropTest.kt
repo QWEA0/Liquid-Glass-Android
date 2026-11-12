@@ -2,6 +2,7 @@ package com.example.liquidglass
 
 import android.content.Context
 import android.graphics.Canvas
+import android.os.Build
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.View
@@ -21,7 +22,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-@SdkSuppress(minSdkVersion = 33)
+@SdkSuppress(minSdkVersion = 31)
 class WebViewBackdropTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
 
@@ -194,6 +195,8 @@ class WebViewBackdropTest {
                     LiquidGlassView(activity).apply {
                         enableAdaptiveTint = false
                         enableDynamicBackground = false
+                        // API 31–32 的 GPU 管线不支持色差，关闭后才能覆盖真实硬件取样。
+                        if (Build.VERSION.SDK_INT < 33) enableChromaticAberration = false
                         if (nested) backdropSource = root
                     }.also { glass ->
                         (panel ?: root).addView(glass, FrameLayout.LayoutParams(
